@@ -32,10 +32,16 @@ pub fn run() {
             builder.mount_events(app);
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
-            let conn = storage::open(&dir.join("archlab.db"))?;
+            let db = dir.join("archlab.db");
             app.manage(AppState {
-                projects: storage::ProjectRepository::new(conn),
+                projects: storage::ProjectRepository::new(storage::open(&db)?),
+                calibrations: std::sync::Arc::new(storage::CalibrationRepository::new(
+                    storage::open(&db)?,
+                )),
                 live: sim::live::LiveRuns::default(),
+                calibration_job: runtime::jobs::JobSlot::default(),
+                real_job: runtime::jobs::JobSlot::default(),
+                scratch_dir: dir.join("scratch"),
             });
             Ok(())
         })

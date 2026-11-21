@@ -23,7 +23,7 @@ export function UtilBar({ value, level }: { value: number | null; level: Severit
   );
 }
 
-function LatencyCells({ latency }: { latency: Latency }) {
+export function LatencyCells({ latency }: { latency: Latency }) {
   return (
     <>
       <td>{ms(latency.p50Ms)}</td>

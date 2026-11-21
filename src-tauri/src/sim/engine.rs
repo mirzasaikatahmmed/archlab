@@ -8,7 +8,7 @@ use super::SimError;
 use super::model::{FaultTarget, Model, ms_to_us};
 use super::report::{
     Bottleneck, ESTIMATE_NOTICE, FaultImpact, Latency, LiveNodeTick, LiveTick, NodeReport,
-    Severity, SimOptions, SimReport, Summary, TimelinePoint, WindowStats,
+    Severity, SimOptions, SimReport, Summary, TimelinePoint, WindowStats, severity_for,
 };
 use super::rng::Stream;
 use crate::domain::chaos::FaultKind;
@@ -758,13 +758,7 @@ impl<'a> Simulation<'a> {
                 0.0
             };
             let dropped = state.rejected + state.timed_out + state.faulted;
-            let severity = if utilization >= 0.9 || dropped > 0 {
-                Severity::Saturated
-            } else if utilization >= 0.7 {
-                Severity::Warning
-            } else {
-                Severity::Healthy
-            };
+            let severity = severity_for(utilization, dropped);
             out.push(NodeReport {
                 id: spec.id.clone(),
                 label: spec.label.clone(),
@@ -925,7 +919,7 @@ fn find_bottleneck(nodes: &[NodeReport]) -> Option<Bottleneck> {
     })
 }
 
-fn ratio(part: u32, whole: u32) -> f64 {
+pub(crate) fn ratio(part: u32, whole: u32) -> f64 {
     if whole == 0 {
         0.0
     } else {
@@ -933,11 +927,11 @@ fn ratio(part: u32, whole: u32) -> f64 {
     }
 }
 
-fn to_u32(v: u64) -> u32 {
+pub(crate) fn to_u32(v: u64) -> u32 {
     u32::try_from(v).unwrap_or(u32::MAX)
 }
 
-fn latency(samples: &mut [u32]) -> Latency {
+pub(crate) fn latency(samples: &mut [u32]) -> Latency {
     samples.sort_unstable();
     #[allow(clippy::cast_precision_loss)]
     let mean = if samples.is_empty() {
@@ -954,7 +948,7 @@ fn latency(samples: &mut [u32]) -> Latency {
 }
 
 /// Nearest-rank percentile of sorted microsecond samples, in milliseconds.
-fn percentile_sorted(sorted: &[u32], p: f64) -> f64 {
+pub(crate) fn percentile_sorted(sorted: &[u32], p: f64) -> f64 {
     if sorted.is_empty() {
         return 0.0;
     }

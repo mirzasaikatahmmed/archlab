@@ -1,36 +1,39 @@
 import { useState } from "react";
 import type { Project } from "../bindings";
 import { LivePanel } from "./LivePanel";
+import { RealPanel } from "./RealPanel";
 import { SimulationPanel } from "./SimulationPanel";
 
-type Mode = "instant" | "live";
+type Mode = "instant" | "live" | "real";
 
-/** Switches between a one-shot run and a live, streaming run. */
+const MODES: { id: Mode; label: string }[] = [
+  { id: "instant", label: "Instant run" },
+  { id: "live", label: "Live run" },
+  { id: "real", label: "Real run" },
+];
+
+/** Switches between a one-shot run, a live streaming run and a real run on this machine. */
 export function SimulateTab({ project }: { project: Project }) {
   const [mode, setMode] = useState<Mode>("instant");
   return (
     <div>
       <div role="group" aria-label="Run mode" className="mode-switch">
-        <button
-          type="button"
-          aria-pressed={mode === "instant"}
-          onClick={() => {
-            setMode("instant");
-          }}
-        >
-          Instant run
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === "live"}
-          onClick={() => {
-            setMode("live");
-          }}
-        >
-          Live run
-        </button>
+        {MODES.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            aria-pressed={mode === m.id}
+            onClick={() => {
+              setMode(m.id);
+            }}
+          >
+            {m.label}
+          </button>
+        ))}
       </div>
-      {mode === "instant" ? <SimulationPanel project={project} /> : <LivePanel project={project} />}
+      {mode === "instant" && <SimulationPanel project={project} />}
+      {mode === "live" && <LivePanel project={project} />}
+      {mode === "real" && <RealPanel project={project} />}
     </div>
   );
 }

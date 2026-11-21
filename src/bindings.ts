@@ -21,11 +21,23 @@ export const commands = {
 	 */
 	startLiveRun: (project: Project, options: SimOptions, speed: number | null, onEvent: Channel<LiveEvent>, _options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("start_live_run", { project, options, speed, onEvent }, _options)),
 	controlLiveRun: (command: LiveCommand, options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("control_live_run", { command }, options)),
+	/**  Benchmarks this machine in the background, reporting each step through `on_event`. */
+	startCalibration: (onEvent: Channel<CalibrationEvent>, options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("start_calibration", { onEvent }, options)),
+	cancelCalibration: (options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("cancel_calibration", undefined, options)),
+	latestCalibration: (options?: InvokeOptions) => typedError<Calibration | null, AppError>(__TAURI_INVOKE("latest_calibration", undefined, options)),
+	/**  Returns `profile` with the newest calibration's measurements filled in. */
+	applyCalibration: (profile: ServerProfile, options?: InvokeOptions) => typedError<ServerProfile, AppError>(__TAURI_INVOKE("apply_calibration", { profile }, options)),
+	/**
+	 *  Runs the project on real localhost sockets and streams progress, then the comparison
+	 *  with the simulation, through `on_event`.
+	 */
+	startRealRun: (project: Project, options: SimOptions, onEvent: Channel<RealEvent>, _options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("start_real_run", { project, options, onEvent }, _options)),
+	cancelRealRun: (options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("cancel_real_run", undefined, options)),
 };
 
 /* Types */
 /**  Error returned by every Tauri command, typed on the TypeScript side. */
-export type AppError = { kind: "validation"; issues: FieldIssue[] } | { kind: "notFound"; id: string } | { kind: "storage"; message: string } | { kind: "simulation"; message: string };
+export type AppError = { kind: "validation"; issues: FieldIssue[] } | { kind: "notFound"; id: string } | { kind: "storage"; message: string } | { kind: "simulation"; message: string } | { kind: "runtime"; message: string };
 
 /**  Static metadata about the running application. */
 export type AppInfo = {
@@ -39,6 +51,27 @@ export type Bottleneck = {
 	severity: Severity,
 	reason: string,
 };
+
+export type Calibration = {
+	/**  Unix epoch milliseconds when the measurement finished. */
+	measuredAt: number | null,
+	/**
+	 *  Clock speed of a core that would run a chain of dependent integer operations as fast as
+	 *  this one, assuming 4 cycles per step. A relative speed score, not the nameplate clock.
+	 */
+	equivalentGhz: number | null,
+	/**  Synced 4 KiB writes per second. Usually lower than a drive's rated random IOPS. */
+	diskIops: number | null,
+	/**  Half the median round trip of a TCP message over localhost, in milliseconds. */
+	loopbackLatencyMs: number | null,
+	/**  Measured by a debug build, which runs far slower than a release build. */
+	debugBuild: boolean,
+	notes: string[],
+};
+
+export type CalibrationEvent = 
+/**  A benchmark is starting; `index` counts from 1. */
+{ kind: "step"; name: string; index: number; total: number } | { kind: "finished"; calibration: Calibration } | { kind: "cancelled" } | { kind: "failed"; message: string };
 
 export type ChaosPlan = {
 	faults: Fault[],
@@ -66,6 +99,15 @@ export type ConfigTemplate = {
 	settings: TemplateSetting[],
 	/**  Simulation behaviour; nodes without it fall back to per-kind defaults. */
 	sim?: SimParams | null,
+};
+
+/**  One metric measured both ways. */
+export type Delta = {
+	metric: string,
+	simulated: number | null,
+	real: number | null,
+	/**  `(real - simulated) / simulated`, absent when the simulated value is zero. */
+	differencePct: number | null,
 };
 
 /**  A detected profile plus notes about values that were guessed, not measured. */
@@ -216,6 +258,26 @@ export type ProjectSummary = {
 	name: string,
 	nodeCount: number,
 	updatedAt: number | null,
+};
+
+export type RealComparison = {
+	real: RealReport,
+	simulated: SimReport,
+	deltas: Delta[],
+};
+
+export type RealEvent = { kind: "progress"; elapsedS: number | null; totalS: number | null; offered: number; completed: number; errors: number } | { kind: "finished"; comparison: RealComparison } | { kind: "cancelled" } | { kind: "failed"; message: string };
+
+export type RealReport = {
+	notice: string,
+	durationS: number | null,
+	warmupS: number | null,
+	hostCores: number,
+	summary: Summary,
+	nodes: NodeReport[],
+	timeline: TimelinePoint[],
+	/**  Caveats that affect how far these numbers can be trusted. */
+	notes: string[],
 };
 
 export type ServerProfile = {

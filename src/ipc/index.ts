@@ -3,6 +3,8 @@ import {
   commands,
   type AppError,
   type AppInfo,
+  type Calibration,
+  type CalibrationEvent,
   type ConfigTemplate,
   type DetectedProfile,
   type FieldIssue,
@@ -10,11 +12,13 @@ import {
   type LiveEvent,
   type Project,
   type ProjectSummary,
+  type RealEvent,
+  type ServerProfile,
   type SimOptions,
   type SimReport,
 } from "../bindings";
 
-export type { AppError, FieldIssue, LiveCommand, LiveEvent };
+export type { AppError, FieldIssue, LiveCommand, LiveEvent, CalibrationEvent, RealEvent };
 
 /** Thrown when a Rust command returns a typed error. */
 export class CommandError extends Error {
@@ -39,6 +43,7 @@ export function describeError(error: AppError): string {
       return `Not found: ${error.id}`;
     case "storage":
     case "simulation":
+    case "runtime":
       return error.message;
   }
 }
@@ -77,4 +82,25 @@ export const api = {
     await unwrap(commands.startLiveRun(project, options, speed, channel));
   },
   controlLiveRun: (command: LiveCommand): Promise<null> => unwrap(commands.controlLiveRun(command)),
+  /** Starts the machine benchmarks; `onEvent` reports each step and the result. */
+  startCalibration: async (onEvent: (event: CalibrationEvent) => void): Promise<void> => {
+    const channel = new Channel<CalibrationEvent>();
+    channel.onmessage = onEvent;
+    await unwrap(commands.startCalibration(channel));
+  },
+  cancelCalibration: (): Promise<null> => unwrap(commands.cancelCalibration()),
+  latestCalibration: (): Promise<Calibration | null> => unwrap(commands.latestCalibration()),
+  applyCalibration: (profile: ServerProfile): Promise<ServerProfile> =>
+    unwrap(commands.applyCalibration(profile)),
+  /** Runs the project on real localhost sockets; `onEvent` gets progress, then the comparison. */
+  startRealRun: async (
+    project: Project,
+    options: SimOptions,
+    onEvent: (event: RealEvent) => void,
+  ): Promise<void> => {
+    const channel = new Channel<RealEvent>();
+    channel.onmessage = onEvent;
+    await unwrap(commands.startRealRun(project, options, channel));
+  },
+  cancelRealRun: (): Promise<null> => unwrap(commands.cancelRealRun()),
 };

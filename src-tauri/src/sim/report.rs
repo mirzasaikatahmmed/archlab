@@ -55,6 +55,17 @@ pub enum Severity {
     Saturated,
 }
 
+/// Status of a node from its utilization and the number of requests it dropped.
+pub fn severity_for(utilization: f64, dropped: u32) -> Severity {
+    if utilization >= 0.9 || dropped > 0 {
+        Severity::Saturated
+    } else if utilization >= 0.7 {
+        Severity::Warning
+    } else {
+        Severity::Healthy
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Latency {

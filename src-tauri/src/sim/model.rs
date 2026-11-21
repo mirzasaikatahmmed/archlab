@@ -30,6 +30,8 @@ pub struct NodeModel {
     pub write_ms: f64,
     pub sigma: f64,
     pub hit_ratio: f64,
+    /// Share of the service time spent on CPU; the rest waits on I/O.
+    pub cpu_share: f64,
     /// Next hops that are not caches, in edge order.
     pub next: Vec<usize>,
     /// Caches that are read before `next`.
@@ -294,6 +296,7 @@ fn node_model(node: &TopologyNode, server: &ServerProfile) -> NodeModel {
         write_ms: 0.0,
         sigma: params.sigma,
         hit_ratio: DEFAULT_HIT_RATIO,
+        cpu_share: 1.0,
         next: Vec::new(),
         caches: Vec::new(),
     };
@@ -323,6 +326,9 @@ fn node_model(node: &TopologyNode, server: &ServerProfile) -> NodeModel {
         model.capacity = capacity;
     }
     model.read_ms = cpu_ms + io_ms;
+    if model.read_ms > 0.0 {
+        model.cpu_share = cpu_ms / model.read_ms;
+    }
     model.write_ms = model.read_ms * params.write_multiplier;
     if node.kind == NodeKind::Cache {
         model.hit_ratio = setting(&params.hit_ratio_setting)

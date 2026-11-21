@@ -33,6 +33,7 @@ rusqlite_migration = "2.7.0"
 sysinfo = "0.40.4"
 rand_chacha = "0.10.0"
 libm = "0.2.16"
+tokio = { version = "1.54.1", features = ["net", "time", "io-util", "sync", "rt-multi-thread"] }
 
 [lints.rust]
 unsafe_code = "forbid"

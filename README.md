@@ -34,7 +34,7 @@ external dependencies for end users. **All simulation results are estimates.**
 | `pnpm bindings`                     | Regenerate `src/bindings.ts` from Rust     |
 | `pnpm check`                        | Everything above (same as CI, minus build) |
 
-## Features (Phases 2-5)
+## Features (Phases 2-6)
 
 - **Projects**: create, open, save, delete (stored locally in SQLite, in the OS app-data folder).
 - **Server profile**: OS, CPU cores/GHz, RAM, disk type + IOPS, network bandwidth/latency,
@@ -61,6 +61,13 @@ external dependencies for end users. **All simulation results are estimates.**
   wait before retry). Reports show error rate and p95 before, during and after each fault and how
   long recovery took; live runs shade the fault windows and show faults on the Stage. See
   [ADR-007](docs/adr/ADR-007-chaos-and-client-policy.md).
+- **Calibration** (Server profile tab): benchmarks this computer (CPU speed score, synced disk
+  writes, loopback latency) in a few seconds and fills the profile with measured values on request.
+- **Real run** (Simulate tab): runs your topology as real localhost servers doing real CPU work and
+  compares the measurements with the simulation. All nodes share this computer's cores, so it
+  checks the model rather than reproducing many machines; limited to 60 s and 5,000 req/s. See
+  [ADR-008](docs/adr/ADR-008-real-mode-and-calibration.md). Use a release build for meaningful
+  CPU numbers: debug builds run far slower.
 - **Stage** (Live run, default view): isometric scene of your topology. A crowd of users, dots flowing
   along the edges, a glow and queue pile at busy nodes, and a dashed capacity column that fills as
   utilization rises. Dots are illustrative (see [ADR-006](docs/adr/ADR-006-stage-visualization.md)).
@@ -91,7 +98,7 @@ src-tauri/src/
   commands/          Thin Tauri command handlers
   domain/            Pure domain types + validation (project, profiles, template, topology)
   storage/           SQLite connection, migrations, repositories
-  runtime/           Host detection (sysinfo); embedded real mode later
+  runtime/           Host detection (sysinfo), calibration benchmarks, real mode (tokio, localhost)
   sim/               Simulation engine (model, engine, seeded RNG, report, live runs)
   chaos/ export/     Later phases
   ipc.rs / error.rs  Command registry + binding export, typed AppError
@@ -107,8 +114,8 @@ Rule: no business logic in the UI; commands only delegate to the Rust modules.
 2. Profile + templates + canvas (done)
 3. Simulation engine (done)
 4. Load generator + live metrics (done)
-5. Chaos (current)
-6. Real mode + calibration
+5. Chaos (done)
+6. Real mode + calibration (current)
 7. What-if
 8. Scenarios
 9. Export (JSON, Markdown, SVG, WebM; PDF later)
@@ -116,4 +123,4 @@ Rule: no business logic in the UI; commands only delegate to the Rust modules.
 
 ## Documentation
 
-- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos
+- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode

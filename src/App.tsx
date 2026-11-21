@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CalibrationSection } from "./components/CalibrationSection";
 import { ChaosEditor } from "./components/ChaosEditor";
 import { Icon, type IconName } from "./components/Icon";
 import { ProjectSidebar } from "./components/ProjectSidebar";
@@ -21,6 +22,8 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
 export default function App() {
   const store = useProjectStore();
   const [tab, setTab] = useState<Tab>("server");
+  /** Bumped when calibration rewrites the profile, so the uncontrolled form reloads it. */
+  const [formVersion, setFormVersion] = useState(0);
   const { current } = store;
 
   useEffect(() => {
@@ -95,10 +98,20 @@ export default function App() {
             </div>
             <section role="tabpanel" className="page">
               {tab === "server" && (
-                <ServerProfileForm
-                  value={current.serverProfile}
-                  onChange={store.setServerProfile}
-                />
+                <>
+                  <ServerProfileForm
+                    key={formVersion}
+                    value={current.serverProfile}
+                    onChange={store.setServerProfile}
+                  />
+                  <CalibrationSection
+                    profile={current.serverProfile}
+                    onApply={(profile) => {
+                      store.setServerProfile(profile);
+                      setFormVersion((v) => v + 1);
+                    }}
+                  />
+                </>
               )}
               {tab === "traffic" && (
                 <TrafficProfileEditor

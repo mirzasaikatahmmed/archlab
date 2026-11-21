@@ -1136,3 +1136,26 @@ details ul {
   white-space: normal;
   max-width: 15rem;
 }
+
+/* ---------- Calibration and real runs ---------- */
+
+.calibration {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+
+.calibration .page-actions {
+  padding: 0;
+}
+
+.calibration-result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.calibration-result .notes {
+  margin: 0;
+}

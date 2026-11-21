@@ -3,11 +3,11 @@
 //! `run` turns a project into a [`SimReport`]. The same project and options
 //! always produce the same report, on every platform.
 
-mod engine;
+pub(crate) mod engine;
 pub mod live;
-mod model;
-mod report;
-mod rng;
+pub(crate) mod model;
+pub(crate) mod report;
+pub(crate) mod rng;
 #[cfg(test)]
 mod tests;
 

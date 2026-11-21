@@ -2,6 +2,7 @@ use serde::Serialize;
 use specta::Type;
 
 use crate::domain::validation::{FieldIssue, ValidationError};
+use crate::runtime::RuntimeError;
 use crate::sim::SimError;
 use crate::storage::StorageError;
 
@@ -21,6 +22,8 @@ pub enum AppError {
     Storage { message: String },
     #[error("{message}")]
     Simulation { message: String },
+    #[error("{message}")]
+    Runtime { message: String },
 }
 
 impl From<ValidationError> for AppError {
@@ -34,6 +37,18 @@ impl From<SimError> for AppError {
         match err {
             SimError::Invalid(v) => v.into(),
             other => Self::Simulation {
+                message: other.to_string(),
+            },
+        }
+    }
+}
+
+impl From<RuntimeError> for AppError {
+    fn from(err: RuntimeError) -> Self {
+        match err {
+            RuntimeError::Invalid(v) => v.into(),
+            RuntimeError::Sim(e) => e.into(),
+            other => Self::Runtime {
                 message: other.to_string(),
             },
         }
