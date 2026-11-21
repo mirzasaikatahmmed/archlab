@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "node",
-  "version": 1,
+  "version": 2,
   "name": "Node.js",
   "description": "Node.js HTTP application server (cluster of single-threaded instances).",
   "nodeKinds": ["appServer"],
@@ -42,5 +42,14 @@
       "max": 3600,
       "description": "Idle time before an HTTP keep-alive socket is closed."
     }
-  ]
+  ],
+  "sim": {
+    "baseServiceMs": 8,
+    "cpuFraction": 0.6,
+    "sigma": 0.6,
+    "writeMultiplier": 1,
+    "concurrencySetting": "instances",
+    "concurrencyPerUnit": 16,
+    "defaultQueue": 512
+  }
 }

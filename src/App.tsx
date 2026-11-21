@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
 import { ProjectSidebar } from "./components/ProjectSidebar";
+import { SimulationPanel } from "./components/SimulationPanel";
 import { ServerProfileForm } from "./components/ServerProfileForm";
 import { TrafficProfileEditor } from "./components/TrafficProfileEditor";
 import { TopologyCanvas } from "./components/topology/TopologyCanvas";
 import { useProjectStore } from "./store/projectStore";
 
-type Tab = "server" | "traffic" | "topology";
+type Tab = "server" | "traffic" | "topology" | "simulate";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "server", label: "Server profile" },
   { id: "traffic", label: "Traffic" },
   { id: "topology", label: "Topology" },
+  { id: "simulate", label: "Simulate" },
 ];
 
 export default function App() {
@@ -103,6 +105,7 @@ export default function App() {
                   onChange={store.setTopology}
                 />
               )}
+              {tab === "simulate" && <SimulationPanel project={current} />}
             </section>
           </div>
         ) : (

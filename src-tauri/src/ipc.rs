@@ -3,7 +3,7 @@
 use specta_typescript::Typescript;
 use tauri_specta::{Builder, ErrorHandlingMode, collect_commands};
 
-use crate::commands::{app, detect, project, templates};
+use crate::commands::{app, detect, project, simulation, templates};
 
 pub fn builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()
@@ -16,6 +16,7 @@ pub fn builder() -> Builder<tauri::Wry> {
             project::create_project,
             project::save_project,
             project::delete_project,
+            simulation::run_simulation,
         ])
         .error_handling(ErrorHandlingMode::Result)
         .disable_serde_phases()

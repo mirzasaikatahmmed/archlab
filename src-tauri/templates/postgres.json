@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "postgres",
-  "version": 1,
+  "version": 2,
   "name": "PostgreSQL",
   "description": "Relational database with common memory and connection settings.",
   "nodeKinds": ["database"],
@@ -42,5 +42,14 @@
       "max": 4194304,
       "description": "Planner estimate of total cache available (including OS cache)."
     }
-  ]
+  ],
+  "sim": {
+    "baseServiceMs": 3,
+    "cpuFraction": 0.4,
+    "sigma": 0.8,
+    "writeMultiplier": 3,
+    "concurrencySetting": "max_connections",
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 256
+  }
 }

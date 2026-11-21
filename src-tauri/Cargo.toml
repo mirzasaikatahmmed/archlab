@@ -31,6 +31,8 @@ specta-typescript = "0.0.15"
 rusqlite = { version = "0.41", features = ["bundled"] }
 rusqlite_migration = "2.7.0"
 sysinfo = "0.40.4"
+rand_chacha = "0.10.0"
+libm = "0.2.16"
 
 [lints.rust]
 unsafe_code = "forbid"

@@ -229,7 +229,7 @@ mod tests {
         assert!(t.validate().is_err());
         t.nodes[2].template = Some(TemplateRef {
             id: "postgres".into(),
-            version: 1,
+            version: 2,
         });
         t.nodes[2].settings.insert("max_connections".into(), 200.0);
         assert!(t.validate().is_ok());

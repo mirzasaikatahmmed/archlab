@@ -13,16 +13,25 @@ export const commands = {
 	createProject: (name: string, options?: InvokeOptions) => typedError<Project, AppError>(__TAURI_INVOKE("create_project", { name }, options)),
 	saveProject: (project: Project, options?: InvokeOptions) => typedError<Project, AppError>(__TAURI_INVOKE("save_project", { project }, options)),
 	deleteProject: (id: string, options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("delete_project", { id }, options)),
+	/**  Runs the simulation for the (possibly unsaved) project on a worker thread. */
+	runSimulation: (project: Project, options: SimOptions, _options?: InvokeOptions) => typedError<SimReport, AppError>(__TAURI_INVOKE("run_simulation", { project, options }, _options)),
 };
 
 /* Types */
 /**  Error returned by every Tauri command, typed on the TypeScript side. */
-export type AppError = { kind: "validation"; issues: FieldIssue[] } | { kind: "notFound"; id: string } | { kind: "storage"; message: string };
+export type AppError = { kind: "validation"; issues: FieldIssue[] } | { kind: "notFound"; id: string } | { kind: "storage"; message: string } | { kind: "simulation"; message: string };
 
 /**  Static metadata about the running application. */
 export type AppInfo = {
 	name: string,
 	version: string,
+};
+
+export type Bottleneck = {
+	nodeId: string,
+	label: string,
+	severity: Severity,
+	reason: string,
 };
 
 export type ConfigTemplate = {
@@ -34,6 +43,8 @@ export type ConfigTemplate = {
 	description: string,
 	nodeKinds: NodeKind[],
 	settings: TemplateSetting[],
+	/**  Simulation behaviour; nodes without it fall back to per-kind defaults. */
+	sim?: SimParams | null,
 };
 
 /**  A detected profile plus notes about values that were guessed, not measured. */
@@ -55,12 +66,40 @@ export type FieldIssue = {
 	message: string,
 };
 
+export type Latency = {
+	meanMs: number | null,
+	p50Ms: number | null,
+	p95Ms: number | null,
+	p99Ms: number | null,
+};
+
 export type NetworkProfile = {
 	bandwidthMbps: number | null,
 	latencyMs: number | null,
 };
 
 export type NodeKind = "client" | "loadBalancer" | "appServer" | "database" | "cache" | "queue";
+
+export type NodeReport = {
+	id: string,
+	label: string,
+	kind: NodeKind,
+	/**  Parallel workers after scaling to the server profile. */
+	servers: number,
+	/**  Requests that may be in the node at once (workers plus waiting room). */
+	capacity: number,
+	arrivals: number,
+	completed: number,
+	rejected: number,
+	timedOut: number,
+	/**  Fraction of worker time spent busy, 0..=1. */
+	utilization: number | null,
+	meanQueue: number | null,
+	maxQueue: number,
+	/**  Time spent in the node (waiting plus service). */
+	latency: Latency,
+	severity: Severity,
+};
 
 export type OperatingSystem = "linux" | "macOs" | "windows" | "other";
 
@@ -98,11 +137,71 @@ export type ServerProfile = {
 	fdLimit: number,
 };
 
+export type Severity = "healthy" | "warning" | "saturated";
+
+export type SimOptions = {
+	/**  Same seed and inputs always give the same report. */
+	seed: number,
+	/**  Simulated time to run, in seconds. */
+	durationS: number | null,
+	/**  Initial period excluded from the statistics, in seconds. */
+	warmupS: number | null,
+};
+
+/**
+ *  How a node running this template behaves in the simulation.
+ * 
+ *  Service times are given for a reference machine (see `sim::model`) and
+ *  scaled by the server profile. All values are estimates, not measurements.
+ */
+export type SimParams = {
+	/**  Mean service time of a read on the reference machine, in milliseconds. */
+	baseServiceMs: number | null,
+	/**  Share of the service time spent on CPU (the rest is I/O), 0..=1. */
+	cpuFraction: number | null,
+	/**  Lognormal shape: larger values give a heavier latency tail. */
+	sigma: number | null,
+	/**  Service-time factor for writes relative to reads. */
+	writeMultiplier: number | null,
+	/**  Setting that gives the number of parallel workers; the core count when absent. */
+	concurrencySetting?: string | null,
+	/**  Workers contributed by each unit of `concurrency_setting`. */
+	concurrencyPerUnit: number | null,
+	/**  Setting that gives the waiting-room size; `default_queue` when absent. */
+	queueSetting?: string | null,
+	defaultQueue: number,
+	/**  Setting holding the cache hit ratio (cache nodes only). */
+	hitRatioSetting?: string | null,
+};
+
+export type SimReport = {
+	notice: string,
+	seed: number,
+	durationS: number | null,
+	warmupS: number | null,
+	summary: Summary,
+	nodes: NodeReport[],
+	bottleneck: Bottleneck | null,
+	timeline: TimelinePoint[],
+	/**  Modelling assumptions that affected this run. */
+	assumptions: string[],
+};
+
 export type SpikePattern = { kind: "none" } | 
 /**  One spike: traffic is multiplied from `at_s` for `duration_s`. */
 { kind: "step"; atS: number | null; multiplier: number | null; durationS: number | null } | 
 /**  Recurring spike every `period_s`, lasting `duration_s`. */
 { kind: "periodic"; periodS: number | null; multiplier: number | null; durationS: number | null };
+
+export type Summary = {
+	offered: number,
+	completed: number,
+	/**  Requests dropped because a queue was full or the timeout expired. */
+	errors: number,
+	throughputRps: number | null,
+	errorRate: number | null,
+	latency: Latency,
+};
 
 export type TemplateRef = {
 	id: string,
@@ -117,6 +216,15 @@ export type TemplateSetting = {
 	min: number | null,
 	max: number | null,
 	description: string,
+};
+
+/**  Metrics for one second of simulated time. */
+export type TimelinePoint = {
+	tS: number,
+	offeredRps: number | null,
+	completedRps: number | null,
+	errorRps: number | null,
+	p95Ms: number | null,
 };
 
 export type Topology = {

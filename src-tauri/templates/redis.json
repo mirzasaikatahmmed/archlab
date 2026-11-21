@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "redis",
-  "version": 1,
+  "version": 2,
   "name": "Redis",
   "description": "In-memory key-value store used as cache or queue.",
   "nodeKinds": ["cache", "queue"],
@@ -41,6 +41,26 @@
       "min": 1,
       "max": 65535,
       "description": "Pending connection queue length."
+    },
+    {
+      "key": "hit_ratio",
+      "label": "Cache hit ratio",
+      "unit": "ratio",
+      "default": 0.8,
+      "min": 0,
+      "max": 1,
+      "description": "Fraction of reads served from the cache (cache nodes only)."
     }
-  ]
+  ],
+  "sim": {
+    "baseServiceMs": 0.05,
+    "cpuFraction": 0.8,
+    "sigma": 0.4,
+    "writeMultiplier": 1,
+    "concurrencySetting": "io_threads",
+    "concurrencyPerUnit": 1,
+    "queueSetting": "maxclients",
+    "defaultQueue": 1024,
+    "hitRatioSetting": "hit_ratio"
+  }
 }

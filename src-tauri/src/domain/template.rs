@@ -30,6 +30,66 @@ pub struct TemplateSetting {
     pub description: String,
 }
 
+/// How a node running this template behaves in the simulation.
+///
+/// Service times are given for a reference machine (see `sim::model`) and
+/// scaled by the server profile. All values are estimates, not measurements.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SimParams {
+    /// Mean service time of a read on the reference machine, in milliseconds.
+    pub base_service_ms: f64,
+    /// Share of the service time spent on CPU (the rest is I/O), 0..=1.
+    pub cpu_fraction: f64,
+    /// Lognormal shape: larger values give a heavier latency tail.
+    pub sigma: f64,
+    /// Service-time factor for writes relative to reads.
+    pub write_multiplier: f64,
+    /// Setting that gives the number of parallel workers; the core count when absent.
+    #[serde(default)]
+    pub concurrency_setting: Option<String>,
+    /// Workers contributed by each unit of `concurrency_setting`.
+    pub concurrency_per_unit: f64,
+    /// Setting that gives the waiting-room size; `default_queue` when absent.
+    #[serde(default)]
+    pub queue_setting: Option<String>,
+    pub default_queue: u32,
+    /// Setting holding the cache hit ratio (cache nodes only).
+    #[serde(default)]
+    pub hit_ratio_setting: Option<String>,
+}
+
+impl SimParams {
+    fn validate(&self, settings: &[TemplateSetting]) -> Result<(), ValidationError> {
+        let mut issues = Issues::default();
+        issues.range_f64("baseServiceMs", self.base_service_ms, 0.001, 100_000.0);
+        issues.range_f64("cpuFraction", self.cpu_fraction, 0.01, 1.0);
+        issues.range_f64("sigma", self.sigma, 0.0, 3.0);
+        issues.range_f64("writeMultiplier", self.write_multiplier, 0.1, 100.0);
+        issues.range_f64(
+            "concurrencyPerUnit",
+            self.concurrency_per_unit,
+            0.1,
+            10_000.0,
+        );
+        issues.range_u32("defaultQueue", self.default_queue, 0, 10_000_000);
+        for (field, key) in [
+            ("concurrencySetting", &self.concurrency_setting),
+            ("queueSetting", &self.queue_setting),
+            ("hitRatioSetting", &self.hit_ratio_setting),
+        ] {
+            if let Some(key) = key {
+                issues.check(
+                    settings.iter().any(|s| &s.key == key),
+                    field,
+                    "refers to an unknown setting",
+                );
+            }
+        }
+        issues.finish()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigTemplate {
@@ -41,6 +101,9 @@ pub struct ConfigTemplate {
     pub description: String,
     pub node_kinds: Vec<NodeKind>,
     pub settings: Vec<TemplateSetting>,
+    /// Simulation behaviour; nodes without it fall back to per-kind defaults.
+    #[serde(default)]
+    pub sim: Option<SimParams>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -79,6 +142,9 @@ impl ConfigTemplate {
                 &format!("{path}.default"),
                 "default must be within min..max",
             );
+        }
+        if let Some(sim) = &self.sim {
+            issues.nested("sim", sim.validate(&self.settings));
         }
         issues.finish()
     }

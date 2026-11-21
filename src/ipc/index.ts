@@ -7,6 +7,8 @@ import {
   type FieldIssue,
   type Project,
   type ProjectSummary,
+  type SimOptions,
+  type SimReport,
 } from "../bindings";
 
 export type { AppError, FieldIssue };
@@ -33,6 +35,7 @@ export function describeError(error: AppError): string {
     case "notFound":
       return `Not found: ${error.id}`;
     case "storage":
+    case "simulation":
       return error.message;
   }
 }
@@ -57,4 +60,6 @@ export const api = {
   createProject: (name: string): Promise<Project> => unwrap(commands.createProject(name)),
   saveProject: (project: Project): Promise<Project> => unwrap(commands.saveProject(project)),
   deleteProject: (id: string): Promise<null> => unwrap(commands.deleteProject(id)),
+  runSimulation: (project: Project, options: SimOptions): Promise<SimReport> =>
+    unwrap(commands.runSimulation(project, options)),
 };

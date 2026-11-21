@@ -167,3 +167,45 @@ body {
 .empty {
   max-width: 40rem;
 }
+
+.sim-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin: 1rem 0;
+}
+
+.summary dt {
+  font-size: 0.8rem;
+  color: inherit;
+}
+
+.summary dd {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.results {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.results th,
+.results td {
+  padding: 0.35rem 0.6rem;
+  text-align: right;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+}
+
+.results th:first-child,
+.results td:first-child {
+  text-align: left;
+}

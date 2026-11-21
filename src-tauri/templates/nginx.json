@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "nginx",
-  "version": 1,
+  "version": 2,
   "name": "Nginx",
   "description": "Reverse proxy / web server with typical worker tuning.",
   "nodeKinds": ["loadBalancer", "appServer"],
@@ -42,5 +42,15 @@
       "max": 1000000,
       "description": "Max requests served over one keep-alive connection."
     }
-  ]
+  ],
+  "sim": {
+    "baseServiceMs": 0.2,
+    "cpuFraction": 0.9,
+    "sigma": 0.3,
+    "writeMultiplier": 1,
+    "concurrencySetting": "worker_processes",
+    "concurrencyPerUnit": 1,
+    "queueSetting": "worker_connections",
+    "defaultQueue": 1024
+  }
 }

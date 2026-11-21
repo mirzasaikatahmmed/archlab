@@ -9,15 +9,16 @@ simulation. Fully local; results are always labeled estimates.
 
 Tauri v2 + Rust (single crate `src-tauri/`), Vite + React + TS UI, pnpm. Rust: commands (thin),
 domain (project, server_profile, traffic, topology, template, validation), storage (rusqlite +
-rusqlite_migration, `ProjectRepository`), runtime/detect (sysinfo), ipc.rs (tauri-specta), error.rs
+rusqlite_migration, `ProjectRepository`), runtime/detect (sysinfo), sim/ (model compile, engine, rng, report), ipc.rs (tauri-specta), error.rs
 (`AppError`). UI: `src/bindings.ts` (GENERATED, committed), `ipc/` facade, `schemas/` zod,
 `store/` Zustand, `components/` (+ `topology/` React Flow). Templates = JSON in `src-tauri/templates/`.
 
 ## Current state
 
-Phase 1 done. Phase 2 implemented on branch `feat/phase-2-profile-canvas` (nothing committed; Phase 1
-also uncommitted). Commands: app_info, detect_machine, list_templates, list/get/create/save/delete
-project. Not yet verified by running the GUI (`pnpm tauri dev`). Next: Phase 3 (sim engine).
+Phases 1-2 committed on `feat/phase-2-profile-canvas` (unpushed). Phase 3 implemented on
+`feat/phase-3-sim-engine` (uncommitted): `sim/` engine + `run_simulation` command + Simulate tab.
+Checks pass (46 UI, 51 Rust tests). GUI never run by hand (`pnpm tauri dev`). Next: Phase 4
+(load generator + live metrics); sim timeline data exists but has no chart yet.
 
 ## Key decisions
 
@@ -26,7 +27,10 @@ project. Not yet verified by running the GUI (`pnpm tauri dev`). Next: Phase 3 (
 - ADR-003: tauri-specta =2.0.0-rc.29 / specta =2.0.0-rc.28, bindings committed + stale-check test.
 - Forms: react-hook-form + zod; Rust re-validates on save; ranges synced via `src/schemas/limits.json`.
 - Host detection lives in `runtime/detect.rs`; guessed values reported as notes.
-- Template settings are numeric only (id, version, min/max); simulation parameters come in Phase 3.
+- Templates: numeric settings plus a `sim` block (ADR-004); templates are version 2 now.
+- ADR-004: discrete-event sim, virtual µs clock, ChaCha8 streams + `libm` for determinism, 5M-event cap,
+  open-loop Poisson arrivals, lognormal service, every node = one machine of the server profile.
+- Sim does not use `concurrentUsers` yet. Reads try caches first; writes skip them; loops are rejected.
 
 ## Conventions and gotchas
 
@@ -34,7 +38,8 @@ project. Not yet verified by running the GUI (`pnpm tauri dev`). Next: Phase 3 (
 - Node 26 via nvm has no corepack: pnpm installed with `npm i -g pnpm`.
 - vitest `beforeEach(() => mock.mockReset())` returns the mock and breaks teardown: use braces.
 - After changing Rust commands/types run `pnpm bindings`; `cargo test` fails if bindings are stale.
-- specta types floats as `number | null`; use `stripNulls` (src/lib/numbers.ts) for validated data.
+- specta types floats as `number | null`; use `stripNulls` (src/lib/numbers.ts) for validated data, but
+  not on `SimReport` (its real `null`s, e.g. `bottleneck`, would become NaN); format with `?? 0` instead.
 - specta forbids 64-bit ints: use u32/f64 in IPC types (timestamps = epoch ms as f64).
 - @xyflow/react 13: use `useNodesState`/`useEdgesState` (no applyNodeChanges export).
 - Keep `@tauri-apps/api` on the same minor as the `tauri` crate (2.11): `tauri build` fails on mismatch.
@@ -46,4 +51,4 @@ See README. `pnpm check` runs all checks; `pnpm tauri dev` runs the app.
 
 ## Last updated
 
-2026-11-21: Phase 2 (profile, templates, traffic, canvas, storage, bindings, ADR-002/003).
+2026-11-22: Phase 3 simulation engine, Simulate tab, ADR-004.

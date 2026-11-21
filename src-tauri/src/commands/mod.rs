@@ -3,4 +3,5 @@
 pub mod app;
 pub mod detect;
 pub mod project;
+pub mod simulation;
 pub mod templates;

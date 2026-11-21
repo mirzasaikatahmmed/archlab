@@ -34,7 +34,7 @@ external dependencies for end users. **All simulation results are estimates.**
 | `pnpm bindings`                     | Regenerate `src/bindings.ts` from Rust     |
 | `pnpm check`                        | Everything above (same as CI, minus build) |
 
-## Features (Phase 2)
+## Features (Phases 2-3)
 
 - **Projects**: create, open, save, delete (stored locally in SQLite, in the OS app-data folder).
 - **Server profile**: OS, CPU cores/GHz, RAM, disk type + IOPS, network bandwidth/latency,
@@ -50,10 +50,17 @@ external dependencies for end users. **All simulation results are estimates.**
 - Validation lives in Rust and runs on every save; zod schemas in the UI give instant feedback
   and are tested against the same range fixture (`src/schemas/limits.json`).
 
+- **Simulation** (Simulate tab): deterministic, seeded discrete-event run of the open project
+  (even with unsaved edits). Reports throughput, error rate, p50/p95/p99, per-node utilization,
+  queueing, drops and the bottleneck. Same seed and inputs give the same report on every
+  platform. Results are estimates; see [ADR-004](docs/adr/ADR-004-simulation-engine.md) for the
+  model and its assumptions.
+
 ### Adding a template
 
 1. Add `src-tauri/templates/<id>.json` (copy an existing one; `id`, `version`, `nodeKinds`,
-   `settings` with `default`/`min`/`max`).
+   `settings` with `default`/`min`/`max`, and a `sim` block: service time, CPU share, sigma, and
+   which settings give the worker count and queue size).
 2. Add it to `EMBEDDED` in `src-tauri/src/domain/template.rs` and to the id list in its test.
 3. Bump a template's `version` when its settings change.
 
@@ -71,7 +78,8 @@ src-tauri/src/
   domain/            Pure domain types + validation (project, profiles, template, topology)
   storage/           SQLite connection, migrations, repositories
   runtime/           Host detection (sysinfo); embedded real mode later
-  sim/ chaos/ export/  Later phases
+  sim/               Simulation engine (model, engine, seeded RNG, report)
+  chaos/ export/     Later phases
   ipc.rs / error.rs  Command registry + binding export, typed AppError
 src-tauri/templates/ Embedded config template JSON
 docs/adr/            Architecture decision records
@@ -82,8 +90,8 @@ Rule: no business logic in the UI; commands only delegate to the Rust modules.
 ## Roadmap
 
 1. Setup / CI / docs (done)
-2. Profile + templates + canvas (current)
-3. Simulation engine
+2. Profile + templates + canvas (done)
+3. Simulation engine (current)
 4. Load generator + live metrics
 5. Chaos
 6. Real mode + calibration
@@ -94,4 +102,4 @@ Rule: no business logic in the UI; commands only delegate to the Rust modules.
 
 ## Documentation
 
-- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation
+- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine
