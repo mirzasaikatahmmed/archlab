@@ -7,6 +7,7 @@ import type {
   ServerProfile,
   Topology,
   TrafficProfile,
+  WhatIf,
 } from "../bindings";
 import { CommandError, api, type FieldIssue } from "../ipc";
 
@@ -30,6 +31,7 @@ interface ProjectState {
   setTrafficProfile: (profile: TrafficProfile) => void;
   setTopology: (topology: Topology) => void;
   setChaos: (chaos: ChaosPlan) => void;
+  setWhatIf: (whatif: WhatIf) => void;
 }
 
 function failure(err: unknown): { error: string; issues: FieldIssue[] } {
@@ -117,19 +119,35 @@ export const useProjectStore = create<ProjectState>()((set, get) => {
     setTrafficProfile: (trafficProfile) => {
       edit({ trafficProfile });
     },
-    /** Faults aimed at a node or edge that no longer exists are dropped along with it. */
+    /** Faults and what-if changes aimed at a node or edge that was removed are dropped with it. */
     setTopology: (topology) => {
       const ids = new Set([...topology.nodes.map((n) => n.id), ...topology.edges.map((e) => e.id)]);
-      const chaos = get().current?.chaos;
-      const kept = chaos?.faults.filter((f) => ids.has(f.target));
-      edit(
-        chaos && kept && kept.length !== chaos.faults.length
-          ? { topology, chaos: { ...chaos, faults: kept } }
-          : { topology },
-      );
+      const { current } = get();
+      const patch: Partial<Project> = { topology };
+      if (current) {
+        const faults = current.chaos.faults.filter((f) => ids.has(f.target));
+        if (faults.length !== current.chaos.faults.length) {
+          patch.chaos = { ...current.chaos, faults };
+        }
+        const variants = current.whatif.variants.map((v) => ({
+          ...v,
+          changes: v.changes.filter(
+            (c) => !(c.kind === "nodeSetting" || c.kind === "replicas") || ids.has(c.node),
+          ),
+        }));
+        if (
+          variants.some((v, i) => v.changes.length !== current.whatif.variants[i].changes.length)
+        ) {
+          patch.whatif = { ...current.whatif, variants };
+        }
+      }
+      edit(patch);
     },
     setChaos: (chaos) => {
       edit({ chaos });
+    },
+    setWhatIf: (whatif) => {
+      edit({ whatif });
     },
   };
 });

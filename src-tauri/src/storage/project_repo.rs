@@ -7,7 +7,7 @@ use super::StorageError;
 use crate::domain::project::{Project, ProjectSummary};
 
 /// Version of the JSON documents stored in the `projects` table.
-const PROJECT_SCHEMA_VERSION: u32 = 2;
+const PROJECT_SCHEMA_VERSION: u32 = 3;
 
 pub struct ProjectRepository {
     conn: Mutex<Connection>,
@@ -63,7 +63,7 @@ impl ProjectRepository {
         let row = conn
             .query_row(
                 "SELECT id, name, schema_version, server_profile, traffic_profile, topology, \
-                 created_at, updated_at, chaos FROM projects WHERE id = ?1",
+                 created_at, updated_at, chaos, whatif FROM projects WHERE id = ?1",
                 [id],
                 |r| {
                     Ok((
@@ -76,12 +76,13 @@ impl ProjectRepository {
                         r.get::<_, i64>(6)?,
                         r.get::<_, i64>(7)?,
                         r.get::<_, String>(8)?,
+                        r.get::<_, String>(9)?,
                     ))
                 },
             )
             .optional()?
             .ok_or_else(|| StorageError::NotFound(id.to_owned()))?;
-        let (id, name, version, server, traffic, topology, created, updated, chaos) = row;
+        let (id, name, version, server, traffic, topology, created, updated, chaos, whatif) = row;
         if version > PROJECT_SCHEMA_VERSION {
             return Err(StorageError::NewerSchema(version));
         }
@@ -92,6 +93,7 @@ impl ProjectRepository {
             traffic_profile: serde_json::from_str(&traffic)?,
             topology: serde_json::from_str(&topology)?,
             chaos: serde_json::from_str(&chaos)?,
+            whatif: serde_json::from_str(&whatif)?,
             created_at: created as f64,
             updated_at: updated as f64,
         })
@@ -104,17 +106,18 @@ impl ProjectRepository {
         let traffic = serde_json::to_string(&project.traffic_profile)?;
         let topology = serde_json::to_string(&project.topology)?;
         let chaos = serde_json::to_string(&project.chaos)?;
+        let whatif = serde_json::to_string(&project.whatif)?;
         let now = now_ms();
         {
             let conn = self.lock()?;
             conn.execute(
                 "INSERT INTO projects (id, name, schema_version, server_profile, traffic_profile, \
-                 topology, chaos, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8) \
+                 topology, chaos, whatif, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9) \
                  ON CONFLICT(id) DO UPDATE SET name = excluded.name, \
                  schema_version = excluded.schema_version, \
                  server_profile = excluded.server_profile, \
                  traffic_profile = excluded.traffic_profile, topology = excluded.topology, \
-                 chaos = excluded.chaos, \
+                 chaos = excluded.chaos, whatif = excluded.whatif, \
                  updated_at = excluded.updated_at",
                 params![
                     project.id,
@@ -124,6 +127,7 @@ impl ProjectRepository {
                     traffic,
                     topology,
                     chaos,
+                    whatif,
                     now
                 ],
             )?;
@@ -179,6 +183,25 @@ mod tests {
         let saved = repo.save(&p).expect("save");
         assert_eq!(saved.chaos, p.chaos);
         assert_eq!(repo.get(&p.id).expect("get").chaos, p.chaos);
+    }
+
+    #[test]
+    fn what_if_variants_are_stored_with_the_project() {
+        use crate::domain::whatif::{Change, Variant};
+        let repo = repo();
+        let mut p = Project::new("What-if");
+        p.whatif.slo.p95_ms = 150.0;
+        p.whatif.variants.push(Variant {
+            id: "v1".into(),
+            name: "Two app servers".into(),
+            changes: vec![Change::Replicas {
+                node: "app".into(),
+                count: 2,
+            }],
+        });
+        let saved = repo.save(&p).expect("save");
+        assert_eq!(saved.whatif, p.whatif);
+        assert_eq!(repo.get(&p.id).expect("get").whatif, p.whatif);
     }
 
     #[test]

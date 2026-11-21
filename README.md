@@ -34,7 +34,7 @@ external dependencies for end users. **All simulation results are estimates.**
 | `pnpm bindings`                     | Regenerate `src/bindings.ts` from Rust     |
 | `pnpm check`                        | Everything above (same as CI, minus build) |
 
-## Features (Phases 2-6)
+## Features (Phases 2-7)
 
 - **Projects**: create, open, save, delete (stored locally in SQLite, in the OS app-data folder).
 - **Server profile**: OS, CPU cores/GHz, RAM, disk type + IOPS, network bandwidth/latency,
@@ -61,6 +61,11 @@ external dependencies for end users. **All simulation results are estimates.**
   wait before retry). Reports show error rate and p95 before, during and after each fault and how
   long recovery took; live runs shade the fault windows and show faults on the Stage. See
   [ADR-007](docs/adr/ADR-007-chaos-and-client-policy.md).
+- **What-if** (What-if tab): ask "what if" against the current design with seeded runs. Compare
+  variants (traffic, server settings, node settings, replicas, no faults) with the baseline,
+  sweep one parameter and chart latency, errors and throughput, or find the highest traffic that
+  still meets your p95 and error targets. Targets and variants are saved with the project. See
+  [ADR-009](docs/adr/ADR-009-what-if-analysis.md). Nodes also have a Replicas setting on the canvas.
 - **Calibration** (Server profile tab): benchmarks this computer (CPU speed score, synced disk
   writes, loopback latency) in a few seconds and fills the profile with measured values on request.
 - **Real run** (Simulate tab): runs your topology as real localhost servers doing real CPU work and
@@ -100,6 +105,7 @@ src-tauri/src/
   storage/           SQLite connection, migrations, repositories
   runtime/           Host detection (sysinfo), calibration benchmarks, real mode (tokio, localhost)
   sim/               Simulation engine (model, engine, seeded RNG, report, live runs)
+  whatif/            What-if runner: compare, sweep, capacity search
   chaos/ export/     Later phases
   ipc.rs / error.rs  Command registry + binding export, typed AppError
 src-tauri/templates/ Embedded config template JSON
@@ -115,12 +121,12 @@ Rule: no business logic in the UI; commands only delegate to the Rust modules.
 3. Simulation engine (done)
 4. Load generator + live metrics (done)
 5. Chaos (done)
-6. Real mode + calibration (current)
-7. What-if
+6. Real mode + calibration (done)
+7. What-if (current)
 8. Scenarios
 9. Export (JSON, Markdown, SVG, WebM; PDF later)
 10. Packaging, signing, auto-update
 
 ## Documentation
 
-- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode
+- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode, ADR-009 what-if

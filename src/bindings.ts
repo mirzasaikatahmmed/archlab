@@ -33,6 +33,9 @@ export const commands = {
 	 */
 	startRealRun: (project: Project, options: SimOptions, onEvent: Channel<RealEvent>, _options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("start_real_run", { project, options, onEvent }, _options)),
 	cancelRealRun: (options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("cancel_real_run", undefined, options)),
+	/**  Runs a what-if analysis in the background, reporting progress and then the result. */
+	startWhatIf: (project: Project, options: SimOptions, request: WhatIfRequest, onEvent: Channel<WhatIfEvent>, _options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("start_what_if", { project, options, request, onEvent }, _options)),
+	cancelWhatIf: (options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("cancel_what_if", undefined, options)),
 };
 
 /* Types */
@@ -73,6 +76,37 @@ export type CalibrationEvent =
 /**  A benchmark is starting; `index` counts from 1. */
 { kind: "step"; name: string; index: number; total: number } | { kind: "finished"; calibration: Calibration } | { kind: "cancelled" } | { kind: "failed"; message: string };
 
+export type CapacityLimit = {
+	node: string,
+	reason: string,
+	/**  Which targets were missed just above the limit. */
+	missed: string[],
+};
+
+export type CapacityReport = {
+	slo: Slo,
+	currentRps: number | null,
+	currentMeetsSlo: boolean,
+	/**  Highest request rate found that meets the targets. */
+	maxRps: number | null,
+	/**  `max_rps / current_rps`; below 1 means the design is already over its limit. */
+	headroom: number | null,
+	/**  The search stopped at its upper bound without finding a limit. */
+	reachedSearchLimit: boolean,
+	limit: CapacityLimit | null,
+	probes: Probe[],
+};
+
+export type Change = 
+/**  Multiply the request rate. */
+{ kind: "trafficScale"; factor: number | null } | 
+/**  Set the request rate. */
+{ kind: "trafficRate"; rps: number | null } | { kind: "server"; field: ServerField; value: number | null } | { kind: "nodeSetting"; node: string; key: string; value: number | null } | 
+/**  Run this many copies of a node behind round-robin. */
+{ kind: "replicas"; node: string; count: number } | 
+/**  Remove every injected fault. */
+{ kind: "chaosOff" };
+
 export type ChaosPlan = {
 	faults: Fault[],
 	policy: ClientPolicy,
@@ -86,6 +120,12 @@ export type ClientPolicy = {
 	maxRetries: number,
 	/**  Wait before each retry. */
 	backoffMs: number | null,
+};
+
+export type CompareReport = {
+	slo: Slo,
+	baseline: VariantResult,
+	variants: VariantResult[],
 };
 
 export type ConfigTemplate = {
@@ -108,6 +148,14 @@ export type Delta = {
 	real: number | null,
 	/**  `(real - simulated) / simulated`, absent when the simulated value is zero. */
 	differencePct: number | null,
+};
+
+/**  How a variant differs from the baseline. */
+export type Deltas = {
+	throughputPct: number | null,
+	p95Pct: number | null,
+	/**  Change in error rate, in percentage points. */
+	errorRatePoints: number | null,
 };
 
 /**  A detected profile plus notes about values that were guessed, not measured. */
@@ -209,6 +257,13 @@ export type NetworkProfile = {
 	latencyMs: number | null,
 };
 
+export type NodeBrief = {
+	id: string,
+	label: string,
+	utilization: number | null,
+	severity: Severity,
+};
+
 export type NodeKind = "client" | "loadBalancer" | "appServer" | "database" | "cache" | "queue";
 
 export type NodeReport = {
@@ -236,9 +291,27 @@ export type NodeReport = {
 
 export type OperatingSystem = "linux" | "macOs" | "windows" | "other";
 
+/**  What one simulation run came to, judged against the targets. */
+export type Outcome = {
+	summary: Summary,
+	bottleneck: Bottleneck | null,
+	meetsSlo: boolean,
+	nodes: NodeBrief[],
+	/**  Why the run could not finish, for example when it needed too many events. */
+	error: string | null,
+};
+
 export type Position = {
 	x: number | null,
 	y: number | null,
+};
+
+export type Probe = {
+	rps: number | null,
+	p95Ms: number | null,
+	errorRate: number | null,
+	meetsSlo: boolean,
+	error: string | null,
 };
 
 export type Project = {
@@ -248,6 +321,7 @@ export type Project = {
 	trafficProfile: TrafficProfile,
 	topology: Topology,
 	chaos: ChaosPlan,
+	whatif: WhatIf,
 	/**  Unix epoch milliseconds. Set by the storage layer on save. */
 	createdAt: number | null,
 	updatedAt: number | null,
@@ -279,6 +353,8 @@ export type RealReport = {
 	/**  Caveats that affect how far these numbers can be trusted. */
 	notes: string[],
 };
+
+export type ServerField = "cpuCores" | "cpuGhz" | "ramGb" | "diskIops" | "networkBandwidthMbps" | "networkLatencyMs" | "fdLimit";
 
 export type ServerProfile = {
 	os: OperatingSystem,
@@ -342,6 +418,14 @@ export type SimReport = {
 	assumptions: string[],
 };
 
+/**  The targets a design has to meet. */
+export type Slo = {
+	/**  95th percentile latency limit, in milliseconds. */
+	p95Ms: number | null,
+	/**  Highest acceptable share of failed requests, 0..=1. */
+	maxErrorRate: number | null,
+};
+
 export type SpikePattern = { kind: "none" } | 
 /**  One spike: traffic is multiplied from `at_s` for `duration_s`. */
 { kind: "step"; atS: number | null; multiplier: number | null; durationS: number | null } | 
@@ -358,6 +442,31 @@ export type Summary = {
 	throughputRps: number | null,
 	errorRate: number | null,
 	latency: Latency,
+};
+
+/**  Which parameter a sweep varies. */
+export type SweepParam = { kind: "trafficScale" } | { kind: "server"; field: ServerField } | { kind: "nodeSetting"; node: string; key: string } | { kind: "replicas"; node: string };
+
+export type SweepPoint = {
+	value: number | null,
+	outcome: Outcome,
+};
+
+export type SweepReport = {
+	slo: Slo,
+	/**  Name of the varied parameter. */
+	label: string,
+	points: SweepPoint[],
+	/**  First value, in sweep order, at which the targets were missed. */
+	firstMiss: number | null,
+};
+
+export type SweepSpec = {
+	param: SweepParam,
+	from: number | null,
+	to: number | null,
+	/**  Number of values to try, evenly spaced (traffic is spaced geometrically). */
+	points: number,
 };
 
 export type TemplateRef = {
@@ -403,6 +512,8 @@ export type TopologyNode = {
 	template: TemplateRef | null,
 	/**  Per-node overrides of template settings, keyed by setting key. */
 	settings: { [key in string]: number | null },
+	/**  Identical copies of this node behind round-robin; each is a machine of the server profile. */
+	replicas?: number,
 };
 
 export type TrafficProfile = {
@@ -413,7 +524,37 @@ export type TrafficProfile = {
 	spike: SpikePattern,
 };
 
+export type Variant = {
+	id: string,
+	name: string,
+	changes: Change[],
+};
+
+export type VariantResult = {
+	id: string,
+	name: string,
+	/**  The changes, in words. */
+	changes: string[],
+	outcome: Outcome,
+	vsBaseline: Deltas | null,
+};
+
 export type Virtualization = "bareMetal" | "vm" | "container";
+
+export type WhatIf = {
+	slo: Slo,
+	variants: Variant[],
+};
+
+export type WhatIfEvent = { kind: "progress"; done: number; total: number } | { kind: "finished"; result: WhatIfResult } | { kind: "cancelled" } | { kind: "failed"; message: string };
+
+export type WhatIfRequest = 
+/**  Baseline against the project's saved variants. */
+{ kind: "compare" } | { kind: "sweep"; spec: SweepSpec } | 
+/**  Highest traffic that still meets the targets. */
+{ kind: "capacity" };
+
+export type WhatIfResult = { kind: "compare"; report: CompareReport } | { kind: "sweep"; report: SweepReport } | { kind: "capacity"; report: CapacityReport };
 
 /**  How the system behaved over a stretch of whole seconds. */
 export type WindowStats = {

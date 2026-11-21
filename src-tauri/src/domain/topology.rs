@@ -8,6 +8,11 @@ use super::validation::{Issues, ValidationError};
 
 pub const MAX_NODES: usize = 200;
 pub const MAX_EDGES: usize = 1_000;
+pub const MAX_REPLICAS: u32 = 64;
+
+fn one_replica() -> u32 {
+    1
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +42,9 @@ pub struct TopologyNode {
     pub template: Option<TemplateRef>,
     /// Per-node overrides of template settings, keyed by setting key.
     pub settings: BTreeMap<String, f64>,
+    /// Identical copies of this node behind round-robin; each is a machine of the server profile.
+    #[serde(default = "one_replica")]
+    pub replicas: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -64,6 +72,7 @@ impl Topology {
             position: Position { x, y: 120.0 },
             template: None,
             settings: BTreeMap::new(),
+            replicas: 1,
         };
         let edge = |id: &str, source: &str, target: &str| TopologyEdge {
             id: id.to_owned(),
@@ -119,6 +128,7 @@ impl Topology {
                 &format!("{path}.position"),
                 "must be finite",
             );
+            issues.range_u32(&format!("{path}.replicas"), n.replicas, 1, MAX_REPLICAS);
             validate_node_template(&mut issues, &path, n);
         }
 

@@ -7,6 +7,7 @@ use super::server_profile::ServerProfile;
 use super::topology::Topology;
 use super::traffic::TrafficProfile;
 use super::validation::{Issues, ValidationError};
+use super::whatif::WhatIf;
 
 pub const MAX_NAME_CHARS: usize = 100;
 
@@ -19,6 +20,7 @@ pub struct Project {
     pub traffic_profile: TrafficProfile,
     pub topology: Topology,
     pub chaos: ChaosPlan,
+    pub whatif: WhatIf,
     /// Unix epoch milliseconds. Set by the storage layer on save.
     pub created_at: f64,
     pub updated_at: f64,
@@ -42,12 +44,14 @@ impl Project {
             traffic_profile: TrafficProfile::default(),
             topology: Topology::starter(),
             chaos: ChaosPlan::default(),
+            whatif: WhatIf::default(),
             created_at: 0.0,
             updated_at: 0.0,
         }
     }
 
-    pub fn validate(&self) -> Result<(), ValidationError> {
+    /// Everything except the what-if variants, which are checked by applying them to this.
+    pub fn validate_core(&self) -> Result<(), ValidationError> {
         let mut issues = Issues::default();
         issues.check(
             Uuid::parse_str(&self.id).is_ok(),
@@ -64,6 +68,13 @@ impl Project {
         issues.nested("trafficProfile", self.traffic_profile.validate());
         issues.nested("topology", self.topology.validate());
         issues.nested("chaos", self.chaos.validate(&self.topology));
+        issues.finish()
+    }
+
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        let mut issues = Issues::default();
+        issues.nested("", self.validate_core());
+        issues.nested("whatif", self.whatif.validate(self));
         issues.finish()
     }
 }

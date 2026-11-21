@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppError, Project } from "../bindings";
-import { chaosPlan, serverProfile, topology, trafficProfile } from "../test/fixtures";
+import { chaosPlan, serverProfile, topology, trafficProfile, whatIfPlan } from "../test/fixtures";
 
 const api = vi.hoisted(() => ({
   listProjects: vi.fn(),
@@ -26,6 +26,7 @@ const project: Project = {
   trafficProfile,
   topology,
   chaos: chaosPlan,
+  whatif: whatIfPlan,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -82,6 +83,35 @@ describe("projectStore", () => {
     const ids = useProjectStore.getState().current?.chaos.faults.map((f) => f.id);
     expect(ids).toEqual(["keep"]);
     expect(useProjectStore.getState().dirty).toBe(true);
+  });
+
+  it("drops what-if changes aimed at a node that was removed, keeping the rest", async () => {
+    const planned: Project = {
+      ...project,
+      whatif: {
+        ...project.whatif,
+        variants: [
+          {
+            id: "v",
+            name: "Mixed",
+            changes: [
+              { kind: "replicas", node: "app", count: 2 },
+              { kind: "replicas", node: "gone", count: 2 },
+              { kind: "nodeSetting", node: "gone", key: "k", value: 1 },
+              { kind: "trafficScale", factor: 2 },
+            ],
+          },
+        ],
+      },
+    };
+    api.createProject.mockResolvedValue(planned);
+    await useProjectStore.getState().createProject("Demo");
+
+    useProjectStore.getState().setTopology(topology);
+    const kinds = useProjectStore
+      .getState()
+      .current?.whatif.variants[0]?.changes.map((c) => c.kind);
+    expect(kinds).toEqual(["replicas", "trafficScale"]);
   });
 
   it("exposes Rust validation issues from a failed save", async () => {

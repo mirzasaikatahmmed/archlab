@@ -12,6 +12,7 @@ pub mod runtime;
 pub mod sim;
 pub mod state;
 pub mod storage;
+pub mod whatif;
 
 use tauri::Manager;
 
@@ -41,6 +42,7 @@ pub fn run() {
                 live: sim::live::LiveRuns::default(),
                 calibration_job: runtime::jobs::JobSlot::default(),
                 real_job: runtime::jobs::JobSlot::default(),
+                whatif_job: runtime::jobs::JobSlot::default(),
                 scratch_dir: dir.join("scratch"),
             });
             Ok(())

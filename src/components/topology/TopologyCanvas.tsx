@@ -105,6 +105,23 @@ export function TopologyCanvas({ topology, templates, onChange }: Props) {
                 }}
               />
             </div>
+            {selected.data.kind !== "client" && (
+              <div className="field">
+                <label htmlFor="node-replicas">Replicas</label>
+                <input
+                  id="node-replicas"
+                  type="number"
+                  step="1"
+                  min="1"
+                  max="64"
+                  value={Number.isNaN(selected.data.replicas) ? "" : selected.data.replicas}
+                  onChange={(e) => {
+                    updateSelected({ replicas: e.target.valueAsNumber });
+                  }}
+                />
+                <small>Identical copies behind round-robin; each is a machine.</small>
+              </div>
+            )}
             <TemplatePicker
               key={selected.id}
               nodeKind={selected.data.kind}

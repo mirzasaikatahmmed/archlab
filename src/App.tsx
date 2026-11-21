@@ -4,12 +4,13 @@ import { ChaosEditor } from "./components/ChaosEditor";
 import { Icon, type IconName } from "./components/Icon";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { SimulateTab } from "./components/SimulateTab";
+import { WhatIfTab } from "./components/WhatIfTab";
 import { ServerProfileForm } from "./components/ServerProfileForm";
 import { TrafficProfileEditor } from "./components/TrafficProfileEditor";
 import { TopologyCanvas } from "./components/topology/TopologyCanvas";
 import { useProjectStore } from "./store/projectStore";
 
-type Tab = "server" | "traffic" | "topology" | "chaos" | "simulate";
+type Tab = "server" | "traffic" | "topology" | "chaos" | "simulate" | "whatif";
 
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: "server", label: "Server profile", icon: "server" },
@@ -17,6 +18,7 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: "topology", label: "Topology", icon: "topology" },
   { id: "chaos", label: "Chaos", icon: "bolt" },
   { id: "simulate", label: "Simulate", icon: "play" },
+  { id: "whatif", label: "What-if", icon: "branch" },
 ];
 
 export default function App() {
@@ -131,6 +133,13 @@ export default function App() {
                   value={current.chaos}
                   topology={current.topology}
                   onChange={store.setChaos}
+                />
+              )}
+              {tab === "whatif" && (
+                <WhatIfTab
+                  project={current}
+                  templates={store.templates}
+                  onChange={store.setWhatIf}
                 />
               )}
               {tab === "simulate" && <SimulateTab project={current} />}

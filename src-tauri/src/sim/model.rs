@@ -318,9 +318,11 @@ fn node_model(node: &TopologyNode, server: &ServerProfile) -> NodeModel {
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     {
-        let servers = servers.round() as usize;
-        let capacity = (servers + queue.max(0.0).round() as usize)
-            .min(server.fd_limit as usize)
+        // Each replica is its own machine: workers, waiting room and file descriptors all multiply.
+        let replicas = node.replicas.max(1) as usize;
+        let servers = servers.round() as usize * replicas;
+        let capacity = (servers + queue.max(0.0).round() as usize * replicas)
+            .min(server.fd_limit as usize * replicas)
             .max(1);
         model.servers = servers.min(capacity);
         model.capacity = capacity;

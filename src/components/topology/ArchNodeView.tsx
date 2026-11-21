@@ -8,6 +8,7 @@ export function ArchNodeView({ data, selected }: NodeProps<ArchNode>) {
       <strong>{data.label}</strong>
       <span>{kindLabel(data.kind)}</span>
       {data.template && <em>{data.template.id}</em>}
+      {data.replicas > 1 && <em>×{data.replicas} replicas</em>}
       <Handle type="source" position={Position.Right} />
     </div>
   );

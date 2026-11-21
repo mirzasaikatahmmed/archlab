@@ -14,7 +14,8 @@ export type IconName =
   | "traffic"
   | "topology"
   | "detect"
-  | "bolt";
+  | "bolt"
+  | "branch";
 
 const SHAPES: Record<IconName, ReactNode> = {
   logo: (
@@ -57,6 +58,14 @@ const SHAPES: Record<IconName, ReactNode> = {
       <circle cx="19" cy="6" r="2.2" />
       <circle cx="19" cy="18" r="2.2" />
       <path d="M7 11l10-4M7 13l10 4" />
+    </>
+  ),
+  branch: (
+    <>
+      <circle cx="6" cy="5" r="2.2" />
+      <circle cx="6" cy="19" r="2.2" />
+      <circle cx="18" cy="9" r="2.2" />
+      <path d="M6 7.2v9.6M18 11.2c0 4-6 3-12 6" />
     </>
   ),
   bolt: <path d="M13 2L4 14h7l-1 8 9-12h-7z" />,

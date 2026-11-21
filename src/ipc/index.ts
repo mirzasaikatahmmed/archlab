@@ -16,9 +16,19 @@ import {
   type ServerProfile,
   type SimOptions,
   type SimReport,
+  type WhatIfEvent,
+  type WhatIfRequest,
 } from "../bindings";
 
-export type { AppError, FieldIssue, LiveCommand, LiveEvent, CalibrationEvent, RealEvent };
+export type {
+  AppError,
+  FieldIssue,
+  LiveCommand,
+  LiveEvent,
+  CalibrationEvent,
+  RealEvent,
+  WhatIfEvent,
+};
 
 /** Thrown when a Rust command returns a typed error. */
 export class CommandError extends Error {
@@ -103,4 +113,16 @@ export const api = {
     await unwrap(commands.startRealRun(project, options, channel));
   },
   cancelRealRun: (): Promise<null> => unwrap(commands.cancelRealRun()),
+  /** Runs a what-if analysis in the background; `onEvent` gets progress, then the result. */
+  startWhatIf: async (
+    project: Project,
+    options: SimOptions,
+    request: WhatIfRequest,
+    onEvent: (event: WhatIfEvent) => void,
+  ): Promise<void> => {
+    const channel = new Channel<WhatIfEvent>();
+    channel.onmessage = onEvent;
+    await unwrap(commands.startWhatIf(project, options, request, channel));
+  },
+  cancelWhatIf: (): Promise<null> => unwrap(commands.cancelWhatIf()),
 };

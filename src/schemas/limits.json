@@ -145,5 +145,48 @@
       "below": -0.01,
       "above": 1.01
     }
+  ],
+  "slo": [
+    {
+      "path": "p95Ms",
+      "min": 1,
+      "max": 60000,
+      "below": 0.5,
+      "above": 60001
+    },
+    {
+      "path": "maxErrorRate",
+      "min": 0,
+      "max": 1,
+      "below": -0.01,
+      "above": 1.01
+    }
+  ],
+  "changeParams": [
+    {
+      "kind": "trafficScale",
+      "path": "factor",
+      "min": 0.01,
+      "max": 100,
+      "below": 0.009,
+      "above": 100.5
+    },
+    {
+      "kind": "replicas",
+      "path": "count",
+      "min": 1,
+      "max": 64,
+      "below": 0,
+      "above": 65
+    }
+  ],
+  "sweepPoints": [
+    {
+      "path": "points",
+      "min": 2,
+      "max": 24,
+      "below": 1,
+      "above": 25
+    }
   ]
 }

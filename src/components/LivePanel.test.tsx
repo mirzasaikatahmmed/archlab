@@ -2,7 +2,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LiveEvent, LiveNodeTick, LiveTick, Project, SimReport } from "../bindings";
-import { chaosPlan, serverProfile, topology, trafficProfile } from "../test/fixtures";
+import { chaosPlan, serverProfile, topology, trafficProfile, whatIfPlan } from "../test/fixtures";
 
 const startLiveRun = vi.hoisted(() => vi.fn());
 const controlLiveRun = vi.hoisted(() => vi.fn());
@@ -21,6 +21,7 @@ const project: Project = {
   trafficProfile,
   topology,
   chaos: chaosPlan,
+  whatif: whatIfPlan,
   createdAt: 0,
   updatedAt: 0,
 };

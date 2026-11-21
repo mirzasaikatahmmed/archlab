@@ -3,7 +3,7 @@
 use specta_typescript::Typescript;
 use tauri_specta::{Builder, ErrorHandlingMode, collect_commands};
 
-use crate::commands::{app, calibration, detect, project, real, simulation, templates};
+use crate::commands::{app, calibration, detect, project, real, simulation, templates, whatif};
 
 pub fn builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()
@@ -25,6 +25,8 @@ pub fn builder() -> Builder<tauri::Wry> {
             calibration::apply_calibration,
             real::start_real_run,
             real::cancel_real_run,
+            whatif::start_what_if,
+            whatif::cancel_what_if,
         ])
         .error_handling(ErrorHandlingMode::Result)
         .disable_serde_phases()

@@ -3,6 +3,7 @@ import limits from "./limits.json";
 import { defaultSpike, trafficProfileSchema } from "./trafficProfile";
 import { serverProfileSchema } from "./serverProfile";
 import { chaosPlanSchema, defaultKind, type FaultKindName } from "./chaos";
+import { sweepSpecSchema, whatIfSchema } from "./whatif";
 
 const server = {
   os: "linux",
@@ -115,5 +116,70 @@ describe("chaos ranges match the shared Rust fixture", () => {
     expect(
       chaosPlanSchema.safeParse({ faults: [], policy: { ...policy, maxRetries: 1.5 } }).success,
     ).toBe(false);
+  });
+});
+
+describe("what-if ranges match the shared Rust fixture", () => {
+  const slo = { p95Ms: 200, maxErrorRate: 0.01 };
+  const variant = (change: unknown) => ({
+    slo,
+    variants: [{ id: "v1", name: "Variant", changes: [change] }],
+  });
+  const check = (
+    schema: { safeParse: (v: unknown) => { success: boolean } },
+    base: unknown,
+    path: string,
+    row: { min: number; max: number; below: number; above: number },
+  ) => {
+    const parse = (v: number) => schema.safeParse(withPath(base as object, path, v)).success;
+    expect(parse(row.min)).toBe(true);
+    expect(parse(row.max)).toBe(true);
+    expect(parse(row.below)).toBe(false);
+    expect(parse(row.above)).toBe(false);
+  };
+
+  it.each(limits.slo)("target $path", (row) => {
+    check(whatIfSchema, { slo, variants: [] }, `slo.${row.path}`, row);
+  });
+
+  it.each(limits.changeParams)("$kind $path", (row) => {
+    const change =
+      row.kind === "trafficScale"
+        ? { kind: "trafficScale", factor: 2 }
+        : { kind: "replicas", node: "app", count: 2 };
+    check(whatIfSchema, variant(change), `variants.0.changes.0.${row.path}`, row);
+  });
+
+  it.each(limits.sweepPoints)("sweep $path", (row) => {
+    const spec = { param: { kind: "trafficScale" }, from: 1, to: 2, points: 5 };
+    check(sweepSpecSchema, spec, row.path, row);
+  });
+
+  it("checks server changes against the profile ranges", () => {
+    const server = (field: string, value: number) =>
+      whatIfSchema.safeParse(variant({ kind: "server", field, value })).success;
+    expect(server("cpuCores", 16)).toBe(true);
+    expect(server("cpuCores", 2.5)).toBe(false);
+    expect(server("cpuCores", 5000)).toBe(false);
+    expect(server("cpuGhz", 3.5)).toBe(true);
+    expect(server("cpuGhz", 99)).toBe(false);
+    expect(server("diskIops", 100_000)).toBe(true);
+  });
+
+  it("rejects an unnamed variant and an empty node choice", () => {
+    expect(
+      whatIfSchema.safeParse({
+        slo,
+        variants: [{ id: "v", name: "  ", changes: [] }],
+      }).success,
+    ).toBe(false);
+    expect(whatIfSchema.safeParse(variant({ kind: "replicas", node: "", count: 2 })).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects a sweep whose start equals its end", () => {
+    const spec = { param: { kind: "trafficScale" }, from: 2, to: 2, points: 5 };
+    expect(sweepSpecSchema.safeParse(spec).success).toBe(false);
   });
 });

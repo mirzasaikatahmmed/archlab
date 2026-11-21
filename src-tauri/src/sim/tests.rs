@@ -16,6 +16,7 @@ fn node(id: &str, kind: NodeKind) -> TopologyNode {
         position: Position { x: 0.0, y: 0.0 },
         template: None,
         settings: BTreeMap::new(),
+        replicas: 1,
     }
 }
 

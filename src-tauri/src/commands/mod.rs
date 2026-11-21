@@ -7,3 +7,4 @@ pub mod project;
 pub mod real;
 pub mod simulation;
 pub mod templates;
+pub mod whatif;

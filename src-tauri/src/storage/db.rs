@@ -11,6 +11,7 @@ static MIGRATIONS: LazyLock<Migrations<'static>> = LazyLock::new(|| {
         M::up(include_str!("migrations/001_init.sql")),
         M::up(include_str!("migrations/002_chaos.sql")),
         M::up(include_str!("migrations/003_calibrations.sql")),
+        M::up(include_str!("migrations/004_whatif.sql")),
     ])
 });
 
@@ -57,6 +58,13 @@ mod tests {
             .expect("chaos column");
         let plan: crate::domain::chaos::ChaosPlan = serde_json::from_str(&json).expect("parse");
         assert_eq!(plan, crate::domain::chaos::ChaosPlan::default());
+        let whatif: String = conn
+            .query_row("SELECT whatif FROM projects WHERE id = 'p'", [], |r| {
+                r.get(0)
+            })
+            .expect("whatif column");
+        let whatif: crate::domain::whatif::WhatIf = serde_json::from_str(&whatif).expect("parse");
+        assert_eq!(whatif, crate::domain::whatif::WhatIf::default());
     }
 
     #[test]

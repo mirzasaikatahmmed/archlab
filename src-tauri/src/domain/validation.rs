@@ -50,7 +50,12 @@ impl Issues {
     pub fn nested(&mut self, prefix: &str, result: Result<(), ValidationError>) {
         if let Err(err) = result {
             for issue in err.issues {
-                self.push(format!("{prefix}.{}", issue.field), issue.message);
+                let field = if prefix.is_empty() {
+                    issue.field
+                } else {
+                    format!("{prefix}.{}", issue.field)
+                };
+                self.push(field, issue.message);
             }
         }
     }

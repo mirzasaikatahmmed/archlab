@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Project } from "../bindings";
-import { chaosPlan, serverProfile, topology, trafficProfile } from "../test/fixtures";
+import { chaosPlan, serverProfile, topology, trafficProfile, whatIfPlan } from "../test/fixtures";
 
 vi.mock("../ipc", async (importActual) => {
   const actual = await importActual<typeof import("../ipc")>();
@@ -21,6 +21,7 @@ const project: Project = {
   trafficProfile,
   topology,
   chaos: chaosPlan,
+  whatif: whatIfPlan,
   createdAt: 0,
   updatedAt: 0,
 };

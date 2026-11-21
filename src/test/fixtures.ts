@@ -3,6 +3,7 @@ import type {
   ConfigTemplate,
   ServerProfile,
   Topology,
+  WhatIf,
   TrafficProfile,
 } from "../bindings";
 
@@ -22,6 +23,11 @@ export const chaosPlan: ChaosPlan = {
   policy: { timeoutMs: 10_000, maxRetries: 0, backoffMs: 100 },
 };
 
+export const whatIfPlan: WhatIf = {
+  slo: { p95Ms: 200, maxErrorRate: 0.01 },
+  variants: [],
+};
+
 export const trafficProfile: TrafficProfile = {
   concurrentUsers: 1000,
   requestsPerSecond: 200,
@@ -38,6 +44,7 @@ export const topology: Topology = {
       position: { x: 0, y: 0 },
       template: null,
       settings: {},
+      replicas: 1,
     },
   ],
   edges: [],

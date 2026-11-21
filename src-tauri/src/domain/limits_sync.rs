@@ -5,9 +5,11 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::chaos::{ChaosPlan, ClientPolicy, Fault, FaultKind};
+use super::project::Project;
 use super::server_profile::ServerProfile;
 use super::topology::Topology;
 use super::traffic::TrafficProfile;
+use super::whatif::{Change, Slo, Variant, WhatIf};
 
 #[derive(Deserialize)]
 struct Limit {
@@ -26,7 +28,19 @@ struct FaultLimit {
 }
 
 #[derive(Deserialize)]
+struct ChangeLimit {
+    kind: String,
+    #[serde(flatten)]
+    limit: Limit,
+}
+
+#[derive(Deserialize)]
 struct Limits {
+    slo: Vec<Limit>,
+    #[serde(rename = "changeParams")]
+    change_params: Vec<ChangeLimit>,
+    #[serde(rename = "sweepPoints")]
+    sweep_points: Vec<Limit>,
     #[serde(rename = "clientPolicy")]
     client_policy: Vec<Limit>,
     #[serde(rename = "faultTiming")]
@@ -153,4 +167,65 @@ fn fault_parameter_ranges_match_shared_fixture() {
             |f| plan_is_valid(vec![f.clone()], ClientPolicy::default()),
         );
     }
+}
+
+#[test]
+fn slo_ranges_match_shared_fixture() {
+    let project = Project::new("limits");
+    check(&Slo::default(), &load().slo, |s| {
+        WhatIf {
+            slo: s.clone(),
+            variants: Vec::new(),
+        }
+        .validate(&project)
+        .is_ok()
+    });
+}
+
+#[test]
+fn change_parameter_ranges_match_shared_fixture() {
+    let project = Project::new("limits");
+    for row in load().change_params {
+        let change = match row.kind.as_str() {
+            "trafficScale" => Change::TrafficScale { factor: 2.0 },
+            "replicas" => Change::Replicas {
+                node: "app".to_owned(),
+                count: 2,
+            },
+            other => panic!("unknown change kind in fixture: {other}"),
+        };
+        check(&change, std::slice::from_ref(&row.limit), |c| {
+            WhatIf {
+                slo: Slo::default(),
+                variants: vec![Variant {
+                    id: "v".to_owned(),
+                    name: "Variant".to_owned(),
+                    changes: vec![c.clone()],
+                }],
+            }
+            .validate(&project)
+            .is_ok()
+        });
+    }
+}
+
+#[test]
+fn sweep_point_limits_match_shared_fixture() {
+    use crate::sim::SimOptions;
+    use crate::whatif::{SweepParam, SweepSpec, WhatIfRequest, validate};
+    let project = Project::new("limits");
+    let spec = SweepSpec {
+        param: SweepParam::TrafficScale,
+        from: 1.0,
+        to: 2.0,
+        points: 5,
+    };
+    check(&spec, &load().sweep_points, |s| {
+        validate(
+            &project,
+            &SimOptions::default(),
+            &WhatIfRequest::Sweep { spec: s.clone() },
+        )
+        .is_ok()
+    });
 }

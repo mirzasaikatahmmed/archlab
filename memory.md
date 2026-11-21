@@ -15,10 +15,11 @@ rusqlite_migration, `ProjectRepository`), runtime/detect (sysinfo), sim/ (model 
 
 ## Current state
 
-Phases 1-5 committed (3 commits on `feat/phase-5-chaos`, unpushed). Phase 6 (calibration + real mode) is
-implemented on `feat/phase-6-real-mode`, UNCOMMITTED. GUI never run by hand (`pnpm tauri dev`); visuals checked
-only in headless Chrome with a mocked backend; real-mode timing only in Rust tests. In `tauri dev` (debug
-build) calibration and real runs are flagged as unreliable: use a release build. Next: Phase 7 (what-if).
+Phases 1-6 committed (4 commits on `feat/phase-6-real-mode`, unpushed). Phase 7 (what-if) is implemented on
+`feat/phase-7-what-if`, UNCOMMITTED. GUI never run by hand (`pnpm tauri dev`); visuals checked only in headless
+Chrome with a mocked backend; real-mode timing only in Rust tests; sim-vs-real divergence not yet measured by
+the user. Release builds are needed for meaningful calibration. Next: Phase 8 (scenarios; maybe auto-suggestions
+and live what-ifs).
 
 ## Key decisions
 
@@ -33,6 +34,9 @@ build) calibration and real runs are flagged as unreliable: use a release build.
 - UI design (2026-11-22): tokens in `src/index.css` (dark default, light via `data-theme` or OS), indigo accent,
   system font, hand-made SVG icons (`Icon.tsx`), `Section` groups fields, `ThemeToggle` (localStorage, try/catch).
   Status colours = healthy/warning/saturated everywhere. Don't restyle bare `button`/`input` per component.
+- ADR-009: what-if = typed `Change`s applied to a project copy (`domain/whatif.rs`), `TopologyNode.replicas`, tools
+  compare/sweep/capacity in `whatif/` (parallel scoped threads; capacity = doubling then bisection), SLO + variants
+  in `Project.whatif` (migration 004, schema v3); UI prunes variant changes for removed nodes.
 - ADR-008: real mode = tokio servers on 127.0.0.1 (16-byte frames, pooled conns), same Model/semantics as sim, real
   CPU chain + timer waits, limits 60 s/5000 rps/20 nodes, no faults; calibration (CPU/disk/loopback) stored in
   `calibrations` (migration 003), applied via Rust `apply_calibration`; `JobSlot` = one job per kind + cancel flag.
@@ -64,4 +68,4 @@ See README. `pnpm check` runs all checks; `pnpm tauri dev` runs the app.
 
 ## Last updated
 
-2026-11-22: Phase 6 calibration + real mode.
+2026-11-22: Phase 7 what-if (compare, sweep, capacity, replicas).

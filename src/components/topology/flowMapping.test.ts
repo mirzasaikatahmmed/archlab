@@ -11,6 +11,7 @@ const topology: Topology = {
       position: { x: 10, y: 20 },
       template: { id: "node", version: 1 },
       settings: { instances: 8 },
+      replicas: 3,
     },
     {
       id: "b",
@@ -19,6 +20,7 @@ const topology: Topology = {
       position: { x: 300, y: 20 },
       template: null,
       settings: {},
+      replicas: 1,
     },
   ],
   edges: [{ id: "e-a-b", source: "a", target: "b" }],
@@ -32,10 +34,18 @@ describe("flow mapping", () => {
     expect(fromFlow(nodes, edges)).toEqual(topology);
   });
 
+  it("treats a node saved without replicas as a single copy", () => {
+    const { id, kind, label, position, template, settings } = topology.nodes[0];
+    const legacy = { id, kind, label, position, template, settings };
+    const { nodes } = toFlow({ nodes: [legacy], edges: [] });
+    expect(nodes[0]?.data.replicas).toBe(1);
+  });
+
   it("creates uniquely labelled nodes at distinct positions", () => {
     const { nodes } = toFlow(topology);
     const added = createNode("appServer", nodes, "n3");
     expect(added.data.label).toBe("App server 2");
+    expect(added.data.replicas).toBe(1);
     expect(
       nodes.some((n) => n.position.x === added.position.x && n.position.y === added.position.y),
     ).toBe(false);

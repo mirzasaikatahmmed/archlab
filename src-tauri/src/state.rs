@@ -12,6 +12,7 @@ pub struct AppState {
     pub live: LiveRuns,
     pub calibration_job: JobSlot,
     pub real_job: JobSlot,
+    pub whatif_job: JobSlot,
     /// Scratch folder for the disk benchmark.
     pub scratch_dir: PathBuf,
 }

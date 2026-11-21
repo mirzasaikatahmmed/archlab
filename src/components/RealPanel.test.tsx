@@ -2,7 +2,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Project, RealComparison, RealEvent, SimReport } from "../bindings";
-import { chaosPlan, serverProfile, topology, trafficProfile } from "../test/fixtures";
+import { chaosPlan, serverProfile, topology, trafficProfile, whatIfPlan } from "../test/fixtures";
 
 const api = vi.hoisted(() => ({ startRealRun: vi.fn(), cancelRealRun: vi.fn() }));
 vi.mock("../ipc", async (importActual) => {
@@ -20,6 +20,7 @@ const project: Project = {
   trafficProfile,
   topology,
   chaos: chaosPlan,
+  whatif: whatIfPlan,
   createdAt: 0,
   updatedAt: 0,
 };

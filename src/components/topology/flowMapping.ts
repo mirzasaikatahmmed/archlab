@@ -7,6 +7,7 @@ export interface ArchNodeData extends Record<string, unknown> {
   label: string;
   template: TemplateRef | null;
   settings: Record<string, number>;
+  replicas: number;
 }
 
 export type ArchNode = Node<ArchNodeData, "arch">;
@@ -34,6 +35,7 @@ export function toFlow(topology: Topology): { nodes: ArchNode[]; edges: Edge[] }
         kind: n.kind,
         label: n.label,
         template: n.template,
+        replicas: n.replicas ?? 1,
         settings: Object.fromEntries(
           Object.entries(n.settings).map(([k, v]) => [k, v ?? Number.NaN]),
         ),
@@ -52,6 +54,7 @@ export function fromFlow(nodes: ArchNode[], edges: Edge[]): Topology {
       position: { x: n.position.x, y: n.position.y },
       template: n.data.template,
       settings: n.data.settings,
+      replicas: n.data.replicas,
     })),
     edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
   };
@@ -69,6 +72,12 @@ export function createNode(kind: NodeKind, existing: ArchNode[], id: string): Ar
     id,
     type: "arch",
     position: { x: 40 + column * 220, y: 40 + row * 140 },
-    data: { kind, label: `${kindLabel(kind)} ${String(count)}`, template: null, settings: {} },
+    data: {
+      kind,
+      label: `${kindLabel(kind)} ${String(count)}`,
+      template: null,
+      settings: {},
+      replicas: 1,
+    },
   };
 }
