@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "node",
+  "version": 1,
+  "name": "Node.js",
+  "description": "Node.js HTTP application server (cluster of single-threaded instances).",
+  "nodeKinds": ["appServer"],
+  "settings": [
+    {
+      "key": "instances",
+      "label": "Instances",
+      "unit": "",
+      "default": 4,
+      "min": 1,
+      "max": 1024,
+      "description": "Number of Node.js processes (cluster workers)."
+    },
+    {
+      "key": "uv_threadpool_size",
+      "label": "UV threadpool size",
+      "unit": "threads",
+      "default": 4,
+      "min": 1,
+      "max": 1024,
+      "description": "libuv threadpool size for fs, crypto and DNS."
+    },
+    {
+      "key": "max_old_space_mb",
+      "label": "Max old space",
+      "unit": "MB",
+      "default": 2048,
+      "min": 128,
+      "max": 65536,
+      "description": "V8 old-generation heap limit per instance."
+    },
+    {
+      "key": "http_keepalive_timeout_s",
+      "label": "HTTP keepalive timeout",
+      "unit": "s",
+      "default": 5,
+      "min": 0,
+      "max": 3600,
+      "description": "Idle time before an HTTP keep-alive socket is closed."
+    }
+  ]
+}

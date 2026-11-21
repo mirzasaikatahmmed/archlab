@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "postgres",
+  "version": 1,
+  "name": "PostgreSQL",
+  "description": "Relational database with common memory and connection settings.",
+  "nodeKinds": ["database"],
+  "settings": [
+    {
+      "key": "max_connections",
+      "label": "Max connections",
+      "unit": "conn",
+      "default": 100,
+      "min": 1,
+      "max": 10000,
+      "description": "Maximum concurrent client connections."
+    },
+    {
+      "key": "shared_buffers_mb",
+      "label": "Shared buffers",
+      "unit": "MB",
+      "default": 128,
+      "min": 16,
+      "max": 1048576,
+      "description": "Memory used for caching table and index pages."
+    },
+    {
+      "key": "work_mem_mb",
+      "label": "Work memory",
+      "unit": "MB",
+      "default": 4,
+      "min": 1,
+      "max": 65536,
+      "description": "Memory per sort or hash operation."
+    },
+    {
+      "key": "effective_cache_size_mb",
+      "label": "Effective cache size",
+      "unit": "MB",
+      "default": 4096,
+      "min": 128,
+      "max": 4194304,
+      "description": "Planner estimate of total cache available (including OS cache)."
+    }
+  ]
+}

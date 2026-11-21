@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "nginx",
+  "version": 1,
+  "name": "Nginx",
+  "description": "Reverse proxy / web server with typical worker tuning.",
+  "nodeKinds": ["loadBalancer", "appServer"],
+  "settings": [
+    {
+      "key": "worker_processes",
+      "label": "Worker processes",
+      "unit": "",
+      "default": 4,
+      "min": 1,
+      "max": 1024,
+      "description": "Number of worker processes (usually one per CPU core)."
+    },
+    {
+      "key": "worker_connections",
+      "label": "Worker connections",
+      "unit": "conn",
+      "default": 1024,
+      "min": 64,
+      "max": 1000000,
+      "description": "Max simultaneous connections per worker."
+    },
+    {
+      "key": "keepalive_timeout_s",
+      "label": "Keepalive timeout",
+      "unit": "s",
+      "default": 65,
+      "min": 0,
+      "max": 3600,
+      "description": "Idle time before a keep-alive connection is closed."
+    },
+    {
+      "key": "keepalive_requests",
+      "label": "Keepalive requests",
+      "unit": "req",
+      "default": 1000,
+      "min": 1,
+      "max": 1000000,
+      "description": "Max requests served over one keep-alive connection."
+    }
+  ]
+}
