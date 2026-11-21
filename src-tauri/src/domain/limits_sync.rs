@@ -4,7 +4,9 @@
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use super::chaos::{ChaosPlan, ClientPolicy, Fault, FaultKind};
 use super::server_profile::ServerProfile;
+use super::topology::Topology;
 use super::traffic::TrafficProfile;
 
 #[derive(Deserialize)]
@@ -17,7 +19,20 @@ struct Limit {
 }
 
 #[derive(Deserialize)]
+struct FaultLimit {
+    kind: String,
+    #[serde(flatten)]
+    limit: Limit,
+}
+
+#[derive(Deserialize)]
 struct Limits {
+    #[serde(rename = "clientPolicy")]
+    client_policy: Vec<Limit>,
+    #[serde(rename = "faultTiming")]
+    fault_timing: Vec<Limit>,
+    #[serde(rename = "faultParams")]
+    fault_params: Vec<FaultLimit>,
     #[serde(rename = "serverProfile")]
     server_profile: Vec<Limit>,
     #[serde(rename = "trafficProfile")]
@@ -88,4 +103,54 @@ fn traffic_profile_ranges_match_shared_fixture() {
     check(&TrafficProfile::default(), &load().traffic_profile, |p| {
         p.validate().is_ok()
     });
+}
+
+fn plan_is_valid(faults: Vec<Fault>, policy: ClientPolicy) -> bool {
+    ChaosPlan { faults, policy }
+        .validate(&Topology::starter())
+        .is_ok()
+}
+
+fn base_fault(kind: FaultKind, target: &str) -> Fault {
+    Fault {
+        id: "f".to_owned(),
+        target: target.to_owned(),
+        kind,
+        start_s: 10.0,
+        duration_s: 5.0,
+    }
+}
+
+#[test]
+fn client_policy_ranges_match_shared_fixture() {
+    check(&ClientPolicy::default(), &load().client_policy, |p| {
+        plan_is_valid(Vec::new(), p.clone())
+    });
+}
+
+#[test]
+fn fault_timing_ranges_match_shared_fixture() {
+    check(
+        &base_fault(FaultKind::Crash, "db"),
+        &load().fault_timing,
+        |f| plan_is_valid(vec![f.clone()], ClientPolicy::default()),
+    );
+}
+
+#[test]
+fn fault_parameter_ranges_match_shared_fixture() {
+    for row in load().fault_params {
+        let (kind, target) = match row.kind.as_str() {
+            "slowdown" => (FaultKind::Slowdown { factor: 2.0 }, "db"),
+            "lostWorkers" => (FaultKind::LostWorkers { fraction: 0.5 }, "db"),
+            "edgeLatency" => (FaultKind::EdgeLatency { extra_ms: 10.0 }, "e-app-db"),
+            "edgeLoss" => (FaultKind::EdgeLoss { loss: 0.5 }, "e-app-db"),
+            other => panic!("unknown fault kind in fixture: {other}"),
+        };
+        check(
+            &base_fault(kind, target),
+            std::slice::from_ref(&row.limit),
+            |f| plan_is_valid(vec![f.clone()], ClientPolicy::default()),
+        );
+    }
 }

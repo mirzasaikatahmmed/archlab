@@ -12,3 +12,6 @@ class ResizeObserverStub {
   disconnect(): void {}
 }
 vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+
+// jsdom has no canvas; drawing code skips itself when there is no 2D context.
+vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);

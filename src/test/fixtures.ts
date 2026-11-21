@@ -1,4 +1,10 @@
-import type { ConfigTemplate, ServerProfile, Topology, TrafficProfile } from "../bindings";
+import type {
+  ChaosPlan,
+  ConfigTemplate,
+  ServerProfile,
+  Topology,
+  TrafficProfile,
+} from "../bindings";
 
 export const serverProfile: ServerProfile = {
   os: "linux",
@@ -9,6 +15,11 @@ export const serverProfile: ServerProfile = {
   network: { bandwidthMbps: 1000, latencyMs: 0.5 },
   virtualization: "vm",
   fdLimit: 65536,
+};
+
+export const chaosPlan: ChaosPlan = {
+  faults: [],
+  policy: { timeoutMs: 10_000, maxRetries: 0, backoffMs: 100 },
 };
 
 export const trafficProfile: TrafficProfile = {

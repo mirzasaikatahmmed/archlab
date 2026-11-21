@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppError, Project } from "../bindings";
-import { serverProfile, topology, trafficProfile } from "../test/fixtures";
+import { chaosPlan, serverProfile, topology, trafficProfile } from "../test/fixtures";
 
 const api = vi.hoisted(() => ({
   listProjects: vi.fn(),
@@ -25,6 +25,7 @@ const project: Project = {
   serverProfile,
   trafficProfile,
   topology,
+  chaos: chaosPlan,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -61,6 +62,26 @@ describe("projectStore", () => {
     expect(api.saveProject).toHaveBeenCalledWith(expect.objectContaining({ name: "Renamed" }));
     expect(state.dirty).toBe(false);
     expect(state.current?.updatedAt).toBe(2);
+  });
+
+  it("drops faults aimed at a node that was removed from the topology", async () => {
+    const faulted: Project = {
+      ...project,
+      chaos: {
+        ...chaosPlan,
+        faults: [
+          { id: "keep", target: "app", kind: { kind: "crash" }, startS: 5, durationS: 5 },
+          { id: "drop", target: "gone", kind: { kind: "crash" }, startS: 5, durationS: 5 },
+        ],
+      },
+    };
+    api.createProject.mockResolvedValue(faulted);
+    await useProjectStore.getState().createProject("Demo");
+
+    useProjectStore.getState().setTopology(topology);
+    const ids = useProjectStore.getState().current?.chaos.faults.map((f) => f.id);
+    expect(ids).toEqual(["keep"]);
+    expect(useProjectStore.getState().dirty).toBe(true);
   });
 
   it("exposes Rust validation issues from a failed save", async () => {

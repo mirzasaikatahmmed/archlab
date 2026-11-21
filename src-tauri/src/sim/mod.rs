@@ -4,6 +4,7 @@
 //! always produce the same report, on every platform.
 
 mod engine;
+pub mod live;
 mod model;
 mod report;
 mod rng;
@@ -22,6 +23,10 @@ pub enum SimError {
     /// The topology cannot be simulated as drawn.
     #[error("{0}")]
     Model(String),
+    #[error("a live run is already in progress")]
+    Busy,
+    #[error("no live run is in progress")]
+    NoActiveRun,
     #[error("the simulation exceeded {limit} events; shorten the run or lower the request rate")]
     EventLimit { limit: u64 },
 }

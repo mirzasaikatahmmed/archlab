@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  ChaosPlan,
   ConfigTemplate,
   Project,
   ProjectSummary,
@@ -28,6 +29,7 @@ interface ProjectState {
   setServerProfile: (profile: ServerProfile) => void;
   setTrafficProfile: (profile: TrafficProfile) => void;
   setTopology: (topology: Topology) => void;
+  setChaos: (chaos: ChaosPlan) => void;
 }
 
 function failure(err: unknown): { error: string; issues: FieldIssue[] } {
@@ -115,8 +117,19 @@ export const useProjectStore = create<ProjectState>()((set, get) => {
     setTrafficProfile: (trafficProfile) => {
       edit({ trafficProfile });
     },
+    /** Faults aimed at a node or edge that no longer exists are dropped along with it. */
     setTopology: (topology) => {
-      edit({ topology });
+      const ids = new Set([...topology.nodes.map((n) => n.id), ...topology.edges.map((e) => e.id)]);
+      const chaos = get().current?.chaos;
+      const kept = chaos?.faults.filter((f) => ids.has(f.target));
+      edit(
+        chaos && kept && kept.length !== chaos.faults.length
+          ? { topology, chaos: { ...chaos, faults: kept } }
+          : { topology },
+      );
+    },
+    setChaos: (chaos) => {
+      edit({ chaos });
     },
   };
 });

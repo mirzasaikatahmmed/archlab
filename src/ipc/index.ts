@@ -1,3 +1,4 @@
+import { Channel } from "@tauri-apps/api/core";
 import {
   commands,
   type AppError,
@@ -5,13 +6,15 @@ import {
   type ConfigTemplate,
   type DetectedProfile,
   type FieldIssue,
+  type LiveCommand,
+  type LiveEvent,
   type Project,
   type ProjectSummary,
   type SimOptions,
   type SimReport,
 } from "../bindings";
 
-export type { AppError, FieldIssue };
+export type { AppError, FieldIssue, LiveCommand, LiveEvent };
 
 /** Thrown when a Rust command returns a typed error. */
 export class CommandError extends Error {
@@ -62,4 +65,16 @@ export const api = {
   deleteProject: (id: string): Promise<null> => unwrap(commands.deleteProject(id)),
   runSimulation: (project: Project, options: SimOptions): Promise<SimReport> =>
     unwrap(commands.runSimulation(project, options)),
+  /** Starts a live run; `onEvent` receives one tick per simulated second. `speed` null = max. */
+  startLiveRun: async (
+    project: Project,
+    options: SimOptions,
+    speed: number | null,
+    onEvent: (event: LiveEvent) => void,
+  ): Promise<void> => {
+    const channel = new Channel<LiveEvent>();
+    channel.onmessage = onEvent;
+    await unwrap(commands.startLiveRun(project, options, speed, channel));
+  },
+  controlLiveRun: (command: LiveCommand): Promise<null> => unwrap(commands.controlLiveRun(command)),
 };

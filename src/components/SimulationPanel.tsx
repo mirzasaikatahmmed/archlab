@@ -1,29 +1,11 @@
 import { useState } from "react";
-import type { Latency, Project, Severity, SimReport } from "../bindings";
+import type { Project, SimReport } from "../bindings";
 import { CommandError, api, describeError } from "../ipc";
+import { Icon } from "./Icon";
+import { ReportView } from "./ReportView";
 
 interface Props {
   project: Project;
-}
-
-const SEVERITY_LABEL: Record<Severity, string> = {
-  healthy: "Healthy",
-  warning: "Warning",
-  saturated: "Saturated",
-};
-
-/** Bindings type floats as `number | null`; the engine never emits non-finite values. */
-const ms = (v: number | null) => `${(v ?? 0).toFixed(1)} ms`;
-const pct = (v: number | null) => `${((v ?? 0) * 100).toFixed(1)}%`;
-
-function LatencyCells({ latency }: { latency: Latency }) {
-  return (
-    <>
-      <td>{ms(latency.p50Ms)}</td>
-      <td>{ms(latency.p95Ms)}</td>
-      <td>{ms(latency.p99Ms)}</td>
-    </>
-  );
 }
 
 /** Runs the simulation for the open project and shows the report. All maths is in Rust. */
@@ -81,87 +63,18 @@ export function SimulationPanel({ project }: Props) {
         </div>
         <button
           type="button"
+          className="primary"
           disabled={running}
           onClick={() => {
             void run();
           }}
         >
+          <Icon name="play" />
           {running ? "Running…" : "Run simulation"}
         </button>
       </div>
       {error && <p role="alert">{error}</p>}
-      {report && (
-        <>
-          <p className="muted">{report.notice}</p>
-          {report.bottleneck ? (
-            <p role="status" className="banner">
-              Bottleneck: <strong>{report.bottleneck.label}</strong> (
-              {SEVERITY_LABEL[report.bottleneck.severity]}) — {report.bottleneck.reason}
-            </p>
-          ) : (
-            <p role="status">No bottleneck: every node stayed below 70% utilization.</p>
-          )}
-          <dl className="summary">
-            <div>
-              <dt>Throughput</dt>
-              <dd>{(report.summary.throughputRps ?? 0).toFixed(1)} req/s</dd>
-            </div>
-            <div>
-              <dt>Error rate</dt>
-              <dd>{pct(report.summary.errorRate)}</dd>
-            </div>
-            <div>
-              <dt>p50</dt>
-              <dd>{ms(report.summary.latency.p50Ms)}</dd>
-            </div>
-            <div>
-              <dt>p95</dt>
-              <dd>{ms(report.summary.latency.p95Ms)}</dd>
-            </div>
-            <div>
-              <dt>p99</dt>
-              <dd>{ms(report.summary.latency.p99Ms)}</dd>
-            </div>
-          </dl>
-          <table className="results">
-            <caption>Per-node results</caption>
-            <thead>
-              <tr>
-                <th>Node</th>
-                <th>Status</th>
-                <th>Utilization</th>
-                <th>Workers</th>
-                <th>Mean queue</th>
-                <th>Dropped</th>
-                <th>p50</th>
-                <th>p95</th>
-                <th>p99</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.nodes.map((n) => (
-                <tr key={n.id}>
-                  <th scope="row">{n.label}</th>
-                  <td>{SEVERITY_LABEL[n.severity]}</td>
-                  <td>{pct(n.utilization)}</td>
-                  <td>{n.servers}</td>
-                  <td>{(n.meanQueue ?? 0).toFixed(2)}</td>
-                  <td>{n.rejected + n.timedOut}</td>
-                  <LatencyCells latency={n.latency} />
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <details>
-            <summary>Modelling assumptions</summary>
-            <ul>
-              {report.assumptions.map((a) => (
-                <li key={a}>{a}</li>
-              ))}
-            </ul>
-          </details>
-        </>
-      )}
+      {report && <ReportView report={report} />}
     </div>
   );
 }

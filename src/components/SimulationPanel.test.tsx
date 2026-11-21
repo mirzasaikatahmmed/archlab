@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Project, SimReport } from "../bindings";
-import { serverProfile, topology, trafficProfile } from "../test/fixtures";
+import { chaosPlan, serverProfile, topology, trafficProfile } from "../test/fixtures";
 
 const runSimulation = vi.hoisted(() => vi.fn());
 vi.mock("../ipc", async (importActual) => {
@@ -19,6 +19,7 @@ const project: Project = {
   serverProfile,
   trafficProfile,
   topology,
+  chaos: chaosPlan,
   createdAt: 0,
   updatedAt: 0,
 };
@@ -34,6 +35,7 @@ const report: SimReport = {
     offered: 1000,
     completed: 990,
     errors: 10,
+    retries: 0,
     throughputRps: 180,
     errorRate: 0.01,
     latency,
@@ -49,6 +51,7 @@ const report: SimReport = {
       completed: 990,
       rejected: 10,
       timedOut: 0,
+      faulted: 0,
       utilization: 0.93,
       meanQueue: 3.2,
       maxQueue: 40,
@@ -63,6 +66,7 @@ const report: SimReport = {
     reason: "93% busy, 10 requests rejected (queue full)",
   },
   timeline: [],
+  faults: [],
   assumptions: ["Open-loop traffic."],
 };
 
@@ -79,6 +83,32 @@ describe("SimulationPanel", () => {
     expect(runSimulation).toHaveBeenCalledWith(project, { seed: 1, durationS: 60, warmupS: 5 });
     expect(screen.getByText("93.0%")).toBeInTheDocument();
     expect(screen.getByText("Estimate from a simulation model.")).toBeInTheDocument();
+  });
+
+  it("shows the fault impact table and retries when faults were injected", async () => {
+    const window = (errorRate: number, p95Ms: number) => ({ errorRate, p95Ms, throughputRps: 100 });
+    runSimulation.mockResolvedValue({
+      ...report,
+      summary: { ...report.summary, retries: 42 },
+      faults: [
+        {
+          faultId: "f1",
+          label: "Crash of App server",
+          startS: 20,
+          endS: 30,
+          before: window(0, 20),
+          during: window(0.9, 800),
+          after: window(0.01, 25),
+          recoveryS: 3,
+        },
+      ],
+    });
+    render(<SimulationPanel project={project} />);
+    await userEvent.click(screen.getByRole("button", { name: "Run simulation" }));
+    expect(await screen.findByText("Crash of App server")).toBeInTheDocument();
+    expect(screen.getByText("90.0%")).toBeInTheDocument();
+    expect(screen.getByText("3 s")).toBeInTheDocument();
+    expect(screen.getByText("Retries sent")).toBeInTheDocument();
   });
 
   it("sends the chosen seed", async () => {

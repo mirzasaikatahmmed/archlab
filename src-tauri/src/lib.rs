@@ -35,6 +35,7 @@ pub fn run() {
             let conn = storage::open(&dir.join("archlab.db"))?;
             app.manage(AppState {
                 projects: storage::ProjectRepository::new(conn),
+                live: sim::live::LiveRuns::default(),
             });
             Ok(())
         })

@@ -251,3 +251,256 @@ fn invalid_options_are_reported() {
     };
     assert!(matches!(run(&p, &bad), Err(SimError::Invalid(_))));
 }
+
+#[test]
+fn stepping_with_ticks_matches_a_batch_run() {
+    use super::engine::Simulation;
+    use super::model::Model;
+
+    let t = topology(
+        &[
+            ("c", NodeKind::Client),
+            ("app", NodeKind::AppServer),
+            ("cache", NodeKind::Cache),
+            ("db", NodeKind::Database),
+        ],
+        &[("c", "app"), ("app", "cache"), ("cache", "db")],
+    );
+    let mut p = project(t, 60.0, 0.8);
+    p.traffic_profile.spike = SpikePattern::Periodic {
+        period_s: 10.0,
+        multiplier: 4.0,
+        duration_s: 2.0,
+    };
+    let opts = options(11, 30.0);
+    let batch = run(&p, &opts).expect("batch");
+
+    let model = Model::compile(&p).expect("model");
+    let mut sim = Simulation::new(&model, &opts);
+    let mut ticks = Vec::new();
+    for second in 1..=30u64 {
+        sim.step_until(second * 1_000_000).expect("step");
+        ticks.push(sim.tick());
+    }
+    assert!(sim.is_finished());
+    assert_eq!(sim.finish(), batch);
+
+    // Ticks carry the same per-second numbers as the final timeline.
+    let points: Vec<_> = ticks.iter().map(|t| t.point.clone()).collect();
+    assert_eq!(points, batch.timeline);
+    assert!(ticks.iter().all(|t| t.nodes.len() == 3));
+    assert!(
+        ticks
+            .iter()
+            .flat_map(|t| &t.nodes)
+            .all(|n| (0.0..=1.0).contains(&n.utilization))
+    );
+    assert!((ticks[29].progress - 1.0).abs() < 1e-9);
+}
+
+mod chaos {
+    use super::*;
+    use crate::domain::chaos::{Fault, FaultKind};
+
+    fn fault(id: &str, target: &str, kind: FaultKind, start_s: f64, duration_s: f64) -> Fault {
+        Fault {
+            id: id.to_owned(),
+            target: target.to_owned(),
+            kind,
+            start_s,
+            duration_s,
+        }
+    }
+
+    /// Four-core reference machine, one app server, steady load, one fault from 20 s to 30 s.
+    fn with_fault(rps: f64, kind: FaultKind, target: &str) -> Project {
+        let mut p = project(client_app(), rps, 1.0);
+        p.server_profile.cpu_cores = 4;
+        p.chaos.faults.push(fault("f", target, kind, 20.0, 10.0));
+        p
+    }
+
+    fn impact(p: &Project) -> super::super::report::FaultImpact {
+        let report = run(p, &options(3, 60.0)).expect("run");
+        report.faults.into_iter().next().expect("fault impact")
+    }
+
+    #[test]
+    fn a_crash_loses_everything_during_the_fault_and_then_recovers() {
+        let i = impact(&with_fault(40.0, FaultKind::Crash, "app"));
+        assert!(i.before.error_rate < 0.01, "before {}", i.before.error_rate);
+        assert!(i.during.error_rate > 0.95, "during {}", i.during.error_rate);
+        assert!(i.after.error_rate < 0.01, "after {}", i.after.error_rate);
+        assert!(i.recovery_s.is_some_and(|s| s <= 3.0), "{:?}", i.recovery_s);
+        assert_eq!(i.label, "Crash of app");
+    }
+
+    #[test]
+    fn crash_losses_are_counted_on_the_crashed_node() {
+        let p = with_fault(40.0, FaultKind::Crash, "app");
+        let report = run(&p, &options(3, 60.0)).expect("run");
+        let app = &report.nodes[0];
+        assert!(app.faulted > 300, "faulted {}", app.faulted);
+        assert_eq!(app.severity, Severity::Saturated);
+        assert!(
+            report
+                .bottleneck
+                .expect("bottleneck")
+                .reason
+                .contains("injected faults")
+        );
+    }
+
+    #[test]
+    fn a_slowdown_raises_latency_only_while_it_lasts() {
+        let i = impact(&with_fault(
+            60.0,
+            FaultKind::Slowdown { factor: 3.0 },
+            "app",
+        ));
+        assert!(i.during.p95_ms > 2.0 * i.before.p95_ms, "{i:?}");
+        assert!(i.after.p95_ms < 1.5 * i.before.p95_ms, "{i:?}");
+    }
+
+    #[test]
+    fn losing_workers_saturates_a_node_that_was_comfortable() {
+        let i = impact(&with_fault(
+            200.0,
+            FaultKind::LostWorkers { fraction: 0.75 },
+            "app",
+        ));
+        assert!(i.during.p95_ms > 3.0 * i.before.p95_ms, "{i:?}");
+        assert!(i.recovery_s.is_some());
+    }
+
+    #[test]
+    fn extra_edge_latency_adds_to_every_request() {
+        let i = impact(&with_fault(
+            30.0,
+            FaultKind::EdgeLatency { extra_ms: 100.0 },
+            "c-app",
+        ));
+        assert!(i.during.p95_ms - i.before.p95_ms > 90.0, "{i:?}");
+    }
+
+    #[test]
+    fn packet_loss_drops_the_matching_share_and_a_partition_drops_all() {
+        let half = impact(&with_fault(
+            60.0,
+            FaultKind::EdgeLoss { loss: 0.5 },
+            "c-app",
+        ));
+        assert!((half.during.error_rate - 0.5).abs() < 0.1, "{half:?}");
+        let cut = impact(&with_fault(
+            60.0,
+            FaultKind::EdgeLoss { loss: 1.0 },
+            "c-app",
+        ));
+        assert!(cut.during.error_rate > 0.99, "{cut:?}");
+        assert!(cut.after.error_rate < 0.01);
+    }
+
+    #[test]
+    fn retries_hide_partial_loss_but_cost_extra_requests() {
+        let mut p = with_fault(60.0, FaultKind::EdgeLoss { loss: 0.5 }, "c-app");
+        let without = run(&p, &options(3, 60.0)).expect("run");
+        p.chaos.policy.max_retries = 3;
+        p.chaos.policy.backoff_ms = 10.0;
+        let with = run(&p, &options(3, 60.0)).expect("run");
+        assert_eq!(without.summary.retries, 0);
+        assert!(
+            with.summary.retries > 100,
+            "retries {}",
+            with.summary.retries
+        );
+        assert!(
+            with.summary.error_rate < without.summary.error_rate / 3.0,
+            "{} vs {}",
+            with.summary.error_rate,
+            without.summary.error_rate
+        );
+    }
+
+    #[test]
+    fn requests_slower_than_the_client_timeout_fail() {
+        let mut p = project(client_app(), 10.0, 1.0);
+        p.chaos.policy.timeout_ms = 50.0;
+        p.chaos.faults.push(fault(
+            "f",
+            "app",
+            FaultKind::Slowdown { factor: 30.0 },
+            0.0,
+            3_600.0,
+        ));
+        let report = run(&p, &options(3, 30.0)).expect("run");
+        assert!(
+            report.summary.error_rate > 0.9,
+            "{}",
+            report.summary.error_rate
+        );
+        assert!(report.nodes[0].timed_out > 0);
+    }
+
+    #[test]
+    fn faults_that_start_after_the_run_are_ignored() {
+        let mut p = project(client_app(), 20.0, 1.0);
+        p.chaos
+            .faults
+            .push(fault("late", "app", FaultKind::Crash, 100.0, 10.0));
+        let report = run(&p, &options(3, 30.0)).expect("run");
+        assert!(report.faults.is_empty());
+        assert_eq!(report.summary.errors, 0);
+    }
+
+    #[test]
+    fn a_fault_with_no_end_inside_the_run_never_recovers() {
+        let mut p = project(client_app(), 20.0, 1.0);
+        p.chaos
+            .faults
+            .push(fault("f", "app", FaultKind::Crash, 10.0, 600.0));
+        let report = run(&p, &options(3, 30.0)).expect("run");
+        assert!(report.faults[0].recovery_s.is_none());
+    }
+
+    #[test]
+    fn same_seed_gives_identical_reports_with_faults_and_retries() {
+        let mut p = with_fault(80.0, FaultKind::EdgeLoss { loss: 0.3 }, "c-app");
+        p.chaos.policy.max_retries = 2;
+        p.chaos
+            .faults
+            .push(fault("g", "app", FaultKind::Crash, 40.0, 5.0));
+        assert_eq!(
+            run(&p, &options(5, 60.0)).expect("a"),
+            run(&p, &options(5, 60.0)).expect("b")
+        );
+    }
+
+    #[test]
+    fn stepping_a_run_with_faults_matches_a_batch_run() {
+        use super::super::engine::Simulation;
+        use super::super::model::Model;
+
+        let mut p = with_fault(80.0, FaultKind::Crash, "app");
+        p.chaos.policy.max_retries = 2;
+        let opts = options(9, 50.0);
+        let batch = run(&p, &opts).expect("batch");
+        let model = Model::compile(&p).expect("model");
+        let mut sim = Simulation::new(&model, &opts);
+        let mut active_seen = false;
+        for second in 1..=50u64 {
+            sim.step_until(second * 1_000_000).expect("step");
+            active_seen |= !sim.tick().active_faults.is_empty();
+        }
+        assert!(active_seen, "ticks never reported the fault as active");
+        assert_eq!(sim.finish(), batch);
+    }
+
+    #[test]
+    fn invalid_fault_targets_are_rejected_before_running() {
+        let p = with_fault(20.0, FaultKind::Crash, "missing");
+        assert!(matches!(
+            run(&p, &options(1, 10.0)),
+            Err(SimError::Invalid(_))
+        ));
+    }
+}

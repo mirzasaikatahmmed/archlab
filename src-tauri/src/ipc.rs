@@ -17,6 +17,8 @@ pub fn builder() -> Builder<tauri::Wry> {
             project::save_project,
             project::delete_project,
             simulation::run_simulation,
+            simulation::start_live_run,
+            simulation::control_live_run,
         ])
         .error_handling(ErrorHandlingMode::Result)
         .disable_serde_phases()

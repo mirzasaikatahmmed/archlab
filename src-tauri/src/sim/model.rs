@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::domain::chaos::{Fault, FaultKind};
 use crate::domain::project::Project;
 use crate::domain::server_profile::ServerProfile;
 use crate::domain::template::{self, SimParams};
@@ -35,10 +36,34 @@ pub struct NodeModel {
     pub caches: Vec<usize>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FaultTarget {
+    Node(usize),
+    Edge(usize),
+}
+
+#[derive(Debug, Clone)]
+pub struct CompiledFault {
+    pub id: String,
+    pub kind: FaultKind,
+    pub target: FaultTarget,
+    pub start_us: u64,
+    pub end_us: u64,
+    /// Human-readable description for reports.
+    pub label: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct Model {
     pub nodes: Vec<NodeModel>,
     pub clients: Vec<usize>,
+    /// Directed edges as (from, to) node indexes, in topology order.
+    pub edges: Vec<(usize, usize)>,
+    pub edge_index: BTreeMap<(usize, usize), usize>,
+    pub faults: Vec<CompiledFault>,
+    pub timeout_us: u64,
+    pub max_retries: u32,
+    pub backoff_us: u64,
     /// Network latency added to every hop and once more for the response.
     pub hop_us: u64,
     pub rps: f64,
@@ -63,7 +88,9 @@ impl Model {
             .iter()
             .map(|n| node_model(n, server))
             .collect();
-        for edge in &topology.edges {
+        let mut edges = Vec::new();
+        let mut edge_index = BTreeMap::new();
+        for (edge_number, edge) in topology.edges.iter().enumerate() {
             let (Some(&from), Some(&to)) = (
                 index.get(edge.source.as_str()),
                 index.get(edge.target.as_str()),
@@ -73,6 +100,8 @@ impl Model {
                     edge.id
                 )));
             };
+            edges.push((from, to));
+            edge_index.insert((from, to), edge_number);
             if nodes[to].kind == NodeKind::Cache {
                 nodes[from].caches.push(to);
             } else {
@@ -101,10 +130,24 @@ impl Model {
         }
         ensure_acyclic(&nodes)?;
 
+        let faults = project
+            .chaos
+            .faults
+            .iter()
+            .map(|f| compile_fault(f, &nodes, &index, &edges, topology))
+            .collect::<Result<Vec<_>, _>>()?;
+        let policy = &project.chaos.policy;
+
         let traffic: &TrafficProfile = &project.traffic_profile;
         Ok(Self {
             nodes,
             clients,
+            edges,
+            edge_index,
+            faults,
+            timeout_us: ms_to_us(policy.timeout_ms),
+            max_retries: policy.max_retries,
+            backoff_us: ms_to_us(policy.backoff_ms),
             hop_us: ms_to_us(server.network.latency_ms),
             rps: traffic.requests_per_second,
             read_ratio: traffic.read_ratio,
@@ -148,6 +191,48 @@ pub fn ms_to_us(ms: f64) -> u64 {
     }
 }
 
+fn compile_fault(
+    fault: &Fault,
+    nodes: &[NodeModel],
+    index: &BTreeMap<&str, usize>,
+    edges: &[(usize, usize)],
+    topology: &crate::domain::topology::Topology,
+) -> Result<CompiledFault, SimError> {
+    let missing = || SimError::Model(format!("fault {} refers to a missing target", fault.id));
+    let (target, place) = if fault.kind.targets_edge() {
+        let number = topology
+            .edges
+            .iter()
+            .position(|e| e.id == fault.target)
+            .ok_or_else(missing)?;
+        let (from, to) = edges.get(number).copied().ok_or_else(missing)?;
+        (
+            FaultTarget::Edge(number),
+            format!("{} \u{2192} {}", nodes[from].label, nodes[to].label),
+        )
+    } else {
+        let node = *index.get(fault.target.as_str()).ok_or_else(missing)?;
+        (FaultTarget::Node(node), nodes[node].label.clone())
+    };
+    let label = match &fault.kind {
+        FaultKind::Crash => format!("Crash of {place}"),
+        FaultKind::Slowdown { factor } => format!("{factor}\u{d7} slowdown of {place}"),
+        FaultKind::LostWorkers { fraction } => {
+            format!("{:.0}% of workers lost on {place}", fraction * 100.0)
+        }
+        FaultKind::EdgeLatency { extra_ms } => format!("+{extra_ms} ms latency on {place}"),
+        FaultKind::EdgeLoss { loss } => format!("{:.0}% packet loss on {place}", loss * 100.0),
+    };
+    Ok(CompiledFault {
+        id: fault.id.clone(),
+        kind: fault.kind.clone(),
+        target,
+        start_us: ms_to_us(fault.start_s * 1_000.0),
+        end_us: ms_to_us(fault.end_s() * 1_000.0),
+        label,
+    })
+}
+
 fn assumptions() -> Vec<String> {
     vec![
         "Open-loop traffic: requests arrive at the configured rate; concurrent users are not used yet."
@@ -155,6 +240,8 @@ fn assumptions() -> Vec<String> {
         "Every node is one machine with the server profile's hardware.".into(),
         "Requests are synchronous and follow edges in order; reads try caches first.".into(),
         "Service times are lognormal, arrivals are Poisson, and a full queue drops the request."
+            .into(),
+        "A request that finishes after the client timeout counts as failed, but still used server capacity."
             .into(),
     ]
 }

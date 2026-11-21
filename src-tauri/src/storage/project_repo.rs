@@ -7,7 +7,7 @@ use super::StorageError;
 use crate::domain::project::{Project, ProjectSummary};
 
 /// Version of the JSON documents stored in the `projects` table.
-const PROJECT_SCHEMA_VERSION: u32 = 1;
+const PROJECT_SCHEMA_VERSION: u32 = 2;
 
 pub struct ProjectRepository {
     conn: Mutex<Connection>,
@@ -63,7 +63,7 @@ impl ProjectRepository {
         let row = conn
             .query_row(
                 "SELECT id, name, schema_version, server_profile, traffic_profile, topology, \
-                 created_at, updated_at FROM projects WHERE id = ?1",
+                 created_at, updated_at, chaos FROM projects WHERE id = ?1",
                 [id],
                 |r| {
                     Ok((
@@ -75,12 +75,13 @@ impl ProjectRepository {
                         r.get::<_, String>(5)?,
                         r.get::<_, i64>(6)?,
                         r.get::<_, i64>(7)?,
+                        r.get::<_, String>(8)?,
                     ))
                 },
             )
             .optional()?
             .ok_or_else(|| StorageError::NotFound(id.to_owned()))?;
-        let (id, name, version, server, traffic, topology, created, updated) = row;
+        let (id, name, version, server, traffic, topology, created, updated, chaos) = row;
         if version > PROJECT_SCHEMA_VERSION {
             return Err(StorageError::NewerSchema(version));
         }
@@ -90,6 +91,7 @@ impl ProjectRepository {
             server_profile: serde_json::from_str(&server)?,
             traffic_profile: serde_json::from_str(&traffic)?,
             topology: serde_json::from_str(&topology)?,
+            chaos: serde_json::from_str(&chaos)?,
             created_at: created as f64,
             updated_at: updated as f64,
         })
@@ -101,16 +103,18 @@ impl ProjectRepository {
         let server = serde_json::to_string(&project.server_profile)?;
         let traffic = serde_json::to_string(&project.traffic_profile)?;
         let topology = serde_json::to_string(&project.topology)?;
+        let chaos = serde_json::to_string(&project.chaos)?;
         let now = now_ms();
         {
             let conn = self.lock()?;
             conn.execute(
                 "INSERT INTO projects (id, name, schema_version, server_profile, traffic_profile, \
-                 topology, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7) \
+                 topology, chaos, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8) \
                  ON CONFLICT(id) DO UPDATE SET name = excluded.name, \
                  schema_version = excluded.schema_version, \
                  server_profile = excluded.server_profile, \
                  traffic_profile = excluded.traffic_profile, topology = excluded.topology, \
+                 chaos = excluded.chaos, \
                  updated_at = excluded.updated_at",
                 params![
                     project.id,
@@ -119,6 +123,7 @@ impl ProjectRepository {
                     server,
                     traffic,
                     topology,
+                    chaos,
                     now
                 ],
             )?;
@@ -156,6 +161,24 @@ mod tests {
         expected.created_at = saved.created_at;
         expected.updated_at = saved.updated_at;
         assert_eq!(repo.get(&saved.id).expect("get"), expected);
+    }
+
+    #[test]
+    fn chaos_plan_is_stored_with_the_project() {
+        use crate::domain::chaos::{Fault, FaultKind};
+        let repo = repo();
+        let mut p = Project::new("Chaos");
+        p.chaos.policy.max_retries = 2;
+        p.chaos.faults.push(Fault {
+            id: "f1".into(),
+            target: "db".into(),
+            kind: FaultKind::Crash,
+            start_s: 20.0,
+            duration_s: 10.0,
+        });
+        let saved = repo.save(&p).expect("save");
+        assert_eq!(saved.chaos, p.chaos);
+        assert_eq!(repo.get(&p.id).expect("get").chaos, p.chaos);
     }
 
     #[test]

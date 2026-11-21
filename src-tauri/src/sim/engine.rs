@@ -5,25 +5,41 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, VecDeque};
 
 use super::SimError;
-use super::model::{Model, ms_to_us};
+use super::model::{FaultTarget, Model, ms_to_us};
 use super::report::{
-    Bottleneck, ESTIMATE_NOTICE, Latency, NodeReport, Severity, SimOptions, SimReport, Summary,
-    TimelinePoint,
+    Bottleneck, ESTIMATE_NOTICE, FaultImpact, Latency, LiveNodeTick, LiveTick, NodeReport,
+    Severity, SimOptions, SimReport, Summary, TimelinePoint, WindowStats,
 };
 use super::rng::Stream;
+use crate::domain::chaos::FaultKind;
 use crate::domain::topology::NodeKind;
 
 /// Hard stop so a runaway scenario cannot freeze the app.
 pub const MAX_EVENTS: u64 = 5_000_000;
-/// A request older than this when it reaches a worker is abandoned.
-const TIMEOUT_US: u64 = 10_000_000;
 const US_PER_S: u64 = 1_000_000;
 
 #[derive(Debug, Clone, Copy)]
 enum EventKind {
     Arrival,
-    Reach { req: u32, node: u32 },
-    Done { req: u32, node: u32 },
+    Reach {
+        req: u32,
+        node: u32,
+    },
+    /// `epoch` is the node's crash count when service began; a mismatch means it crashed meanwhile.
+    Done {
+        req: u32,
+        node: u32,
+        epoch: u32,
+    },
+    Retry {
+        req: u32,
+    },
+    FaultStart {
+        fault: u32,
+    },
+    FaultEnd {
+        fault: u32,
+    },
 }
 
 struct Event {
@@ -60,12 +76,16 @@ struct Request {
     /// Node to continue from if a cache probe misses and the cache has no onward edge.
     fallback: Option<usize>,
     cache_done: bool,
+    /// Client the request came from, where retries start again.
+    client: usize,
+    attempt: u32,
 }
 
 #[derive(Clone, Copy)]
 enum DropReason {
     Rejected,
     TimedOut,
+    Faulted,
 }
 
 struct NodeState {
@@ -75,13 +95,32 @@ struct NodeState {
     rr: usize,
     last_t: u64,
     busy_area: f64,
+    /// Worker-time that was available (workers while the node was up), for utilization.
+    avail_area: f64,
     queue_area: f64,
     max_queue: usize,
     arrivals: u32,
     completed: u32,
     rejected: u32,
     timed_out: u32,
+    faulted: u32,
     latencies: Vec<u32>,
+    /// The same areas over the whole run (warm-up included), for live utilization.
+    tick_busy: f64,
+    tick_avail: f64,
+    last_tick_busy: f64,
+    last_tick_avail: f64,
+    drops_all: u32,
+    up: bool,
+    epoch: u32,
+    slow: f64,
+    workers: usize,
+}
+
+#[derive(Clone, Copy)]
+struct EdgeState {
+    extra_us: u64,
+    loss: f64,
 }
 
 #[derive(Default)]
@@ -92,69 +131,126 @@ struct Bucket {
     latencies: Vec<u32>,
 }
 
-struct Engine<'a> {
+/// A running simulation. Advance it with [`Simulation::step_until`]; stepping in any
+/// pattern gives the same final report as one call to [`run`].
+pub struct Simulation<'a> {
     model: &'a Model,
+    options: SimOptions,
+    tick_index: u32,
     heap: BinaryHeap<Event>,
     seq: u64,
     events: u64,
+    clock: u64,
     reqs: Vec<Request>,
     states: Vec<NodeState>,
+    edges: Vec<EdgeState>,
+    active: Vec<bool>,
     arrivals: Stream,
     attrs: Stream,
+    fault_rng: Stream,
     client_rr: usize,
     warmup_us: u64,
     end_us: u64,
     offered: u32,
     completed: u32,
     errors: u32,
+    retries: u32,
     latencies: Vec<u32>,
     buckets: Vec<Bucket>,
 }
 
 pub fn run(model: &Model, options: &SimOptions) -> Result<SimReport, SimError> {
-    let seed = u64::from(options.seed);
-    let end_us = ms_to_us(options.duration_s * 1_000.0);
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let bucket_count = options.duration_s.ceil() as usize;
-    let mut engine = Engine {
-        model,
-        heap: BinaryHeap::new(),
-        seq: 0,
-        events: 0,
-        reqs: Vec::new(),
-        states: (0..model.nodes.len())
-            .map(|i| NodeState {
-                rng: Stream::new(seed, 2 + i as u64),
-                busy: 0,
-                waiting: VecDeque::new(),
-                rr: 0,
-                last_t: 0,
-                busy_area: 0.0,
-                queue_area: 0.0,
-                max_queue: 0,
-                arrivals: 0,
-                completed: 0,
-                rejected: 0,
-                timed_out: 0,
-                latencies: Vec::new(),
-            })
-            .collect(),
-        arrivals: Stream::new(seed, 0),
-        attrs: Stream::new(seed, 1),
-        client_rr: 0,
-        warmup_us: ms_to_us(options.warmup_s * 1_000.0),
-        end_us,
-        offered: 0,
-        completed: 0,
-        errors: 0,
-        latencies: Vec::new(),
-        buckets: (0..bucket_count).map(|_| Bucket::default()).collect(),
-    };
-    engine.simulate()?;
-    Ok(engine.report(options))
+    let mut sim = Simulation::new(model, options);
+    sim.step_until(sim.end_us())?;
+    Ok(sim.finish())
 }
 
-impl Engine<'_> {
+impl<'a> Simulation<'a> {
+    pub fn new(model: &'a Model, options: &SimOptions) -> Self {
+        let mut sim = Self::build(model, options);
+        for (i, fault) in model.faults.iter().enumerate() {
+            let id = to_u32(i as u64);
+            if fault.start_us <= sim.end_us {
+                sim.schedule(fault.start_us, EventKind::FaultStart { fault: id });
+            }
+            if fault.end_us <= sim.end_us {
+                sim.schedule(fault.end_us, EventKind::FaultEnd { fault: id });
+            }
+        }
+        let first = sim.next_arrival_gap();
+        sim.schedule(first, EventKind::Arrival);
+        sim
+    }
+
+    fn build(model: &'a Model, options: &SimOptions) -> Self {
+        let seed = u64::from(options.seed);
+        let end_us = ms_to_us(options.duration_s * 1_000.0);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let bucket_count = options.duration_s.ceil() as usize;
+        let node_count = model.nodes.len() as u64;
+        Self {
+            model,
+            options: options.clone(),
+            tick_index: 0,
+            heap: BinaryHeap::new(),
+            seq: 0,
+            events: 0,
+            clock: 0,
+            reqs: Vec::new(),
+            states: model
+                .nodes
+                .iter()
+                .enumerate()
+                .map(|(i, spec)| NodeState {
+                    rng: Stream::new(seed, 2 + i as u64),
+                    busy: 0,
+                    waiting: VecDeque::new(),
+                    rr: 0,
+                    last_t: 0,
+                    busy_area: 0.0,
+                    avail_area: 0.0,
+                    queue_area: 0.0,
+                    max_queue: 0,
+                    arrivals: 0,
+                    completed: 0,
+                    rejected: 0,
+                    timed_out: 0,
+                    faulted: 0,
+                    latencies: Vec::new(),
+                    tick_busy: 0.0,
+                    tick_avail: 0.0,
+                    last_tick_busy: 0.0,
+                    last_tick_avail: 0.0,
+                    drops_all: 0,
+                    up: true,
+                    epoch: 0,
+                    slow: 1.0,
+                    workers: spec.servers,
+                })
+                .collect(),
+            edges: vec![
+                EdgeState {
+                    extra_us: 0,
+                    loss: 0.0
+                };
+                model.edges.len()
+            ],
+            active: vec![false; model.faults.len()],
+            arrivals: Stream::new(seed, 0),
+            attrs: Stream::new(seed, 1),
+            fault_rng: Stream::new(seed, 2 + node_count),
+            client_rr: 0,
+            warmup_us: ms_to_us(options.warmup_s * 1_000.0),
+            end_us,
+            offered: 0,
+            completed: 0,
+            errors: 0,
+            retries: 0,
+            latencies: Vec::new(),
+            buckets: (0..bucket_count).map(|_| Bucket::default()).collect(),
+        }
+    }
+
     fn schedule(&mut self, time: u64, kind: EventKind) {
         self.seq += 1;
         self.heap.push(Event {
@@ -164,27 +260,104 @@ impl Engine<'_> {
         });
     }
 
-    fn simulate(&mut self) -> Result<(), SimError> {
-        let first = self.next_arrival_gap();
-        self.schedule(first, EventKind::Arrival);
-        while let Some(event) = self.heap.pop() {
-            if event.time > self.end_us {
-                break;
-            }
+    pub fn end_us(&self) -> u64 {
+        self.end_us
+    }
+
+    /// Processes every event up to and including `limit_us` (capped at the end of the run).
+    pub fn step_until(&mut self, limit_us: u64) -> Result<(), SimError> {
+        let limit = limit_us.min(self.end_us);
+        while self.heap.peek().is_some_and(|e| e.time <= limit) {
+            let Some(event) = self.heap.pop() else { break };
             self.events += 1;
             if self.events > MAX_EVENTS {
                 return Err(SimError::EventLimit { limit: MAX_EVENTS });
             }
+            let now = event.time;
             match event.kind {
-                EventKind::Arrival => self.on_arrival(event.time),
-                EventKind::Reach { req, node } => self.on_reach(event.time, req, node as usize),
-                EventKind::Done { req, node } => self.on_done(event.time, req, node as usize),
+                EventKind::Arrival => self.on_arrival(now),
+                EventKind::Reach { req, node } => self.on_reach(now, req, node as usize),
+                EventKind::Done { req, node, epoch } => {
+                    self.on_done(now, req, node as usize, epoch);
+                }
+                EventKind::Retry { req } => self.on_retry(now, req),
+                EventKind::FaultStart { fault } => self.set_fault(now, fault as usize, true),
+                EventKind::FaultEnd { fault } => self.set_fault(now, fault as usize, false),
             }
         }
-        for node in 0..self.states.len() {
-            self.advance(node, self.end_us);
-        }
+        self.clock = limit;
         Ok(())
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.clock >= self.end_us
+    }
+
+    /// Metrics for the second that just completed; call once per whole simulated second.
+    /// Only reads simulation state, so ticking never changes the final report.
+    pub fn tick(&mut self) -> LiveTick {
+        let second = self.tick_index;
+        self.tick_index += 1;
+        let point = {
+            let width = (self.options.duration_s - f64::from(second)).min(1.0);
+            let b = &mut self.buckets[second as usize];
+            b.latencies.sort_unstable();
+            TimelinePoint {
+                t_s: second,
+                offered_rps: f64::from(b.offered) / width,
+                completed_rps: f64::from(b.completed) / width,
+                error_rps: f64::from(b.errors) / width,
+                p95_ms: percentile_sorted(&b.latencies, 0.95),
+            }
+        };
+        let clock = self.clock;
+        let nodes = self
+            .model
+            .nodes
+            .iter()
+            .zip(self.states.iter_mut())
+            .filter(|(spec, _)| spec.kind != NodeKind::Client)
+            .map(|(spec, state)| {
+                #[allow(clippy::cast_precision_loss)]
+                let since = clock.saturating_sub(state.last_t) as f64;
+                #[allow(clippy::cast_precision_loss)]
+                let busy = state.tick_busy + state.busy as f64 * since;
+                #[allow(clippy::cast_precision_loss)]
+                let avail = state.tick_avail + available(state) as f64 * since;
+                let (d_busy, d_avail) =
+                    (busy - state.last_tick_busy, avail - state.last_tick_avail);
+                state.last_tick_busy = busy;
+                state.last_tick_avail = avail;
+                let utilization = if d_avail > 0.0 {
+                    (d_busy / d_avail).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                LiveNodeTick {
+                    id: spec.id.clone(),
+                    utilization,
+                    queue: to_u32(state.waiting.len() as u64),
+                    busy: to_u32(state.busy as u64),
+                    dropped: state.drops_all,
+                }
+            })
+            .collect();
+        #[allow(clippy::cast_precision_loss)]
+        let progress = (self.clock as f64 / self.end_us as f64).min(1.0);
+        let active_faults = self
+            .model
+            .faults
+            .iter()
+            .zip(&self.active)
+            .filter(|(_, on)| **on)
+            .map(|(f, _)| f.id.clone())
+            .collect();
+        LiveTick {
+            point,
+            nodes,
+            progress,
+            active_faults,
+        }
     }
 
     /// Candidate gap of the Poisson process at the peak rate, in microseconds.
@@ -212,12 +385,16 @@ impl Engine<'_> {
 
         let read = self.attrs.unit() < self.model.read_ratio;
         let id = to_u32(self.reqs.len() as u64);
+        let client = self.model.clients[self.client_rr % self.model.clients.len()];
+        self.client_rr += 1;
         self.reqs.push(Request {
             start: now,
             entered: now,
             read,
             fallback: None,
             cache_done: false,
+            client,
+            attempt: 0,
         });
         if now >= self.warmup_us {
             self.offered += 1;
@@ -226,15 +403,45 @@ impl Engine<'_> {
             b.offered += 1;
         }
 
-        let client = self.model.clients[self.client_rr % self.model.clients.len()];
-        self.client_rr += 1;
         let target = self.route(id, client);
-        self.forward(now, id, target);
+        self.forward(now, id, client, target);
     }
 
-    fn send(&mut self, now: u64, req: u32, node: usize) {
-        let node = to_u32(node as u64);
-        self.schedule(now + self.model.hop_us, EventKind::Reach { req, node });
+    fn on_retry(&mut self, now: u64, req: u32) {
+        let r = &mut self.reqs[req as usize];
+        r.fallback = None;
+        r.cache_done = false;
+        r.entered = now;
+        let client = r.client;
+        let target = self.route(req, client);
+        self.forward(now, req, client, target);
+    }
+
+    /// Sends `req` over the edge `from -> to`, or ends it if there is nowhere to go.
+    fn forward(&mut self, now: u64, req: u32, from: usize, target: Option<usize>) {
+        match target {
+            Some(to) => self.send(now, req, from, to),
+            None => self.complete(now, req, from),
+        }
+    }
+
+    fn send(&mut self, now: u64, req: u32, from: usize, to: usize) {
+        let edge = self.model.edge_index.get(&(from, to)).map_or(
+            EdgeState {
+                extra_us: 0,
+                loss: 0.0,
+            },
+            |&e| self.edges[e],
+        );
+        if edge.loss > 0.0 && self.fault_rng.unit() < edge.loss {
+            self.attempt_failed(now, req, to, DropReason::Faulted);
+            return;
+        }
+        let node = to_u32(to as u64);
+        self.schedule(
+            now + self.model.hop_us + edge.extra_us,
+            EventKind::Reach { req, node },
+        );
     }
 
     fn on_reach(&mut self, now: u64, req: u32, node: usize) {
@@ -246,20 +453,22 @@ impl Engine<'_> {
         if measured {
             state.arrivals += 1;
         }
-        if state.busy < spec.servers {
+        if !state.up {
+            self.attempt_failed(now, req, node, DropReason::Faulted);
+        } else if state.busy < state.workers {
             self.start(now, req, node);
         } else if state.busy + state.waiting.len() < spec.capacity {
             state.waiting.push_back(req);
             state.max_queue = state.max_queue.max(state.waiting.len());
         } else {
-            self.drop_request(now, node, DropReason::Rejected);
+            self.attempt_failed(now, req, node, DropReason::Rejected);
         }
     }
 
     /// Puts `req` on a free worker of `node`, or abandons it if it already timed out.
     fn start(&mut self, now: u64, req: u32, node: usize) {
-        if now - self.reqs[req as usize].start > TIMEOUT_US {
-            self.drop_request(now, node, DropReason::TimedOut);
+        if now - self.reqs[req as usize].start > self.model.timeout_us {
+            self.attempt_failed(now, req, node, DropReason::TimedOut);
             return;
         }
         let spec = &self.model.nodes[node];
@@ -269,14 +478,30 @@ impl Engine<'_> {
             spec.write_ms
         };
         let state = &mut self.states[node];
-        let service_us = ms_to_us(state.rng.lognormal(mean_ms, spec.sigma)).max(1);
+        let service_us = ms_to_us(state.rng.lognormal(mean_ms * state.slow, spec.sigma)).max(1);
         state.busy += 1;
+        let epoch = state.epoch;
         let node = to_u32(node as u64);
-        self.schedule(now + service_us, EventKind::Done { req, node });
+        self.schedule(now + service_us, EventKind::Done { req, node, epoch });
     }
 
-    fn on_done(&mut self, now: u64, req: u32, node: usize) {
+    /// Starts waiting requests while the node has free workers.
+    fn pump(&mut self, now: u64, node: usize) {
+        while self.states[node].up && self.states[node].busy < self.states[node].workers {
+            let Some(next) = self.states[node].waiting.pop_front() else {
+                break;
+            };
+            self.start(now, next, node);
+        }
+    }
+
+    fn on_done(&mut self, now: u64, req: u32, node: usize, epoch: u32) {
         self.advance(node, now);
+        if epoch != self.states[node].epoch {
+            // The node crashed while serving this request.
+            self.attempt_failed(now, req, node, DropReason::Faulted);
+            return;
+        }
         let entered = self.reqs[req as usize].entered;
         let state = &mut self.states[node];
         state.busy -= 1;
@@ -284,14 +509,7 @@ impl Engine<'_> {
             state.completed += 1;
             state.latencies.push(to_u32(now - entered));
         }
-
-        while self.states[node].busy < self.model.nodes[node].servers {
-            let Some(next) = self.states[node].waiting.pop_front() else {
-                break;
-            };
-            self.start(now, next, node);
-        }
-
+        self.pump(now, node);
         self.after_service(now, req, node);
     }
 
@@ -300,25 +518,22 @@ impl Engine<'_> {
         if spec.kind == NodeKind::Cache {
             let hit = self.reqs[req as usize].read && self.attrs.unit() < spec.hit_ratio;
             if hit {
-                self.finish(now, req);
+                self.complete(now, req, node);
                 return;
             }
             self.reqs[req as usize].cache_done = true;
-            let target = self.pick_next(node).or_else(|| {
+            let own = self.pick_next(node).map(|to| (node, to));
+            let picked = own.or_else(|| {
                 let parent = self.reqs[req as usize].fallback.take()?;
-                self.pick_next(parent)
+                self.pick_next(parent).map(|to| (parent, to))
             });
-            self.forward(now, req, target);
+            match picked {
+                Some((owner, to)) => self.send(now, req, owner, to),
+                None => self.complete(now, req, node),
+            }
         } else {
             let target = self.route(req, node);
-            self.forward(now, req, target);
-        }
-    }
-
-    fn forward(&mut self, now: u64, req: u32, target: Option<usize>) {
-        match target {
-            Some(next) => self.send(now, req, next),
-            None => self.finish(now, req),
+            self.forward(now, req, node, target);
         }
     }
 
@@ -349,9 +564,15 @@ impl Engine<'_> {
         Some(pick)
     }
 
-    fn finish(&mut self, now: u64, req: u32) {
+    /// The response reached the client. A late response counts as a failed attempt.
+    fn complete(&mut self, now: u64, req: u32, last: usize) {
         let done = now + self.model.hop_us;
-        let latency = to_u32(done - self.reqs[req as usize].start);
+        let age = done - self.reqs[req as usize].start;
+        if age > self.model.timeout_us {
+            self.attempt_failed(now, req, last, DropReason::TimedOut);
+            return;
+        }
+        let latency = to_u32(age);
         if done >= self.warmup_us && done <= self.end_us {
             self.completed += 1;
             self.latencies.push(latency);
@@ -362,23 +583,120 @@ impl Engine<'_> {
         }
     }
 
-    fn drop_request(&mut self, now: u64, node: usize, why: DropReason) {
-        if now >= self.warmup_us {
-            self.errors += 1;
-            let state = &mut self.states[node];
+    fn attempt_failed(&mut self, now: u64, req: u32, node: usize, why: DropReason) {
+        let measured = now >= self.warmup_us;
+        let state = &mut self.states[node];
+        state.drops_all += 1;
+        if measured {
             match why {
                 DropReason::Rejected => state.rejected += 1,
                 DropReason::TimedOut => state.timed_out += 1,
+                DropReason::Faulted => state.faulted += 1,
             }
+        }
+
+        let r = &mut self.reqs[req as usize];
+        let retry_at = now + self.model.backoff_us;
+        if r.attempt < self.model.max_retries && retry_at - r.start < self.model.timeout_us {
+            r.attempt += 1;
+            if measured {
+                self.retries += 1;
+            }
+            self.schedule(retry_at, EventKind::Retry { req });
+            return;
+        }
+        if measured {
+            self.errors += 1;
         }
         if let Some(b) = self.bucket(now) {
             b.errors += 1;
         }
     }
 
-    /// Accumulates busy and queue time up to `now`, counting only the measured window.
+    /// Switches a fault on or off and recomputes every node and edge it touches.
+    fn set_fault(&mut self, now: u64, fault: usize, on: bool) {
+        for node in 0..self.states.len() {
+            self.advance(node, now);
+        }
+        self.active[fault] = on;
+
+        let n = self.states.len();
+        let mut up = vec![true; n];
+        let mut slow = vec![1.0; n];
+        let mut lost = vec![0.0; n];
+        let mut extra = vec![0u64; self.edges.len()];
+        let mut delivered = vec![1.0; self.edges.len()];
+        for (f, _) in self
+            .model
+            .faults
+            .iter()
+            .zip(&self.active)
+            .filter(|(_, a)| **a)
+        {
+            match (f.target, &f.kind) {
+                (FaultTarget::Node(i), FaultKind::Crash) => up[i] = false,
+                (FaultTarget::Node(i), FaultKind::Slowdown { factor }) => slow[i] *= factor,
+                (FaultTarget::Node(i), FaultKind::LostWorkers { fraction }) => lost[i] += fraction,
+                (FaultTarget::Edge(i), FaultKind::EdgeLatency { extra_ms }) => {
+                    extra[i] += ms_to_us(*extra_ms);
+                }
+                (FaultTarget::Edge(i), FaultKind::EdgeLoss { loss }) => delivered[i] *= 1.0 - loss,
+                _ => {}
+            }
+        }
+        for (i, edge) in self.edges.iter_mut().enumerate() {
+            edge.extra_us = extra[i];
+            edge.loss = 1.0 - delivered[i];
+        }
+        for node in 0..n {
+            self.update_node(now, node, up[node], slow[node], lost[node]);
+        }
+    }
+
+    fn update_node(&mut self, now: u64, node: usize, up: bool, slow: f64, lost: f64) {
+        let configured = self.model.nodes[node].servers;
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            clippy::cast_precision_loss
+        )]
+        let workers = if configured == 0 {
+            0
+        } else {
+            (((configured as f64) * (1.0 - lost.min(0.95))).floor() as usize).max(1)
+        };
+        let state = &mut self.states[node];
+        let was_up = state.up;
+        let changed = state.workers != workers;
+        state.up = up;
+        state.slow = slow;
+        state.workers = workers;
+        if was_up && !up {
+            // Crash: everything in service is lost (see `Done::epoch`); the queue is flushed.
+            state.epoch += 1;
+            state.busy = 0;
+            let flushed: Vec<u32> = state.waiting.drain(..).collect();
+            for req in flushed {
+                self.attempt_failed(now, req, node, DropReason::Faulted);
+            }
+        } else if up && (changed || !was_up) {
+            self.pump(now, node);
+        }
+    }
+
+    /// Accumulates busy, available and queue time up to `now`, counting only the measured window.
     fn advance(&mut self, node: usize, now: u64) {
         let state = &mut self.states[node];
+        let all_from = state.last_t.min(self.end_us);
+        let all_to = now.min(self.end_us);
+        if all_to > all_from {
+            #[allow(clippy::cast_precision_loss)]
+            {
+                let dt = (all_to - all_from) as f64;
+                state.tick_busy += state.busy as f64 * dt;
+                state.tick_avail += available(state) as f64 * dt;
+            }
+        }
         let from = state.last_t.max(self.warmup_us);
         let to = now.min(self.end_us);
         if to > from {
@@ -386,21 +704,29 @@ impl Engine<'_> {
             {
                 let dt = (to - from) as f64;
                 state.busy_area += state.busy as f64 * dt;
+                state.avail_area += available(state) as f64 * dt;
                 state.queue_area += state.waiting.len() as f64 * dt;
             }
         }
         state.last_t = now;
     }
 
-    fn report(mut self, options: &SimOptions) -> SimReport {
+    /// Closes the books at the end of the run and builds the report.
+    pub fn finish(mut self) -> SimReport {
+        for node in 0..self.states.len() {
+            self.advance(node, self.end_us);
+        }
+        let options = self.options.clone();
         let window_s = options.duration_s - options.warmup_s;
         let nodes = self.node_reports(window_s);
         let bottleneck = find_bottleneck(&nodes);
+        let faults = self.fault_impacts();
         let timeline = self.timeline(options.duration_s);
         let summary = Summary {
             offered: self.offered,
             completed: self.completed,
             errors: self.errors,
+            retries: self.retries,
             throughput_rps: f64::from(self.completed) / window_s,
             error_rate: ratio(self.errors, self.offered),
             latency: latency(&mut self.latencies),
@@ -414,6 +740,7 @@ impl Engine<'_> {
             nodes,
             bottleneck,
             timeline,
+            faults,
             assumptions: self.model.assumptions.clone(),
         }
     }
@@ -425,9 +752,12 @@ impl Engine<'_> {
             if spec.kind == NodeKind::Client {
                 continue;
             }
-            #[allow(clippy::cast_precision_loss)]
-            let utilization = (state.busy_area / (spec.servers as f64 * window_us)).clamp(0.0, 1.0);
-            let dropped = state.rejected + state.timed_out;
+            let utilization = if state.avail_area > 0.0 {
+                (state.busy_area / state.avail_area).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let dropped = state.rejected + state.timed_out + state.faulted;
             let severity = if utilization >= 0.9 || dropped > 0 {
                 Severity::Saturated
             } else if utilization >= 0.7 {
@@ -445,6 +775,7 @@ impl Engine<'_> {
                 completed: state.completed,
                 rejected: state.rejected,
                 timed_out: state.timed_out,
+                faulted: state.faulted,
                 utilization,
                 mean_queue: state.queue_area / window_us,
                 max_queue: to_u32(state.max_queue as u64),
@@ -474,10 +805,94 @@ impl Engine<'_> {
             })
             .collect()
     }
+
+    /// Compares each fault window with equally long windows before and after it.
+    fn fault_impacts(&self) -> Vec<FaultImpact> {
+        let n = self.buckets.len();
+        self.model
+            .faults
+            .iter()
+            .filter(|f| f.start_us <= self.end_us)
+            .map(|f| {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let (start_b, end_b) = (
+                    ((f.start_us / US_PER_S) as usize).min(n),
+                    (f.end_us.div_ceil(US_PER_S) as usize).min(n),
+                );
+                let width = end_b.saturating_sub(start_b).max(1);
+                let before = self.window(start_b.saturating_sub(width), start_b);
+                let during = self.window(start_b, end_b);
+                let after = self.window(end_b, (end_b + width).min(n));
+                let recovery_s = self.recovery(end_b, &before);
+                #[allow(clippy::cast_precision_loss)]
+                FaultImpact {
+                    fault_id: f.id.clone(),
+                    label: f.label.clone(),
+                    start_s: f.start_us as f64 / 1e6,
+                    end_s: f.end_us as f64 / 1e6,
+                    before,
+                    during,
+                    after,
+                    recovery_s,
+                }
+            })
+            .collect()
+    }
+
+    fn window(&self, from: usize, to: usize) -> WindowStats {
+        let buckets = &self.buckets[from.min(to)..to];
+        let (mut done, mut failed) = (0u32, 0u32);
+        let mut samples: Vec<u32> = Vec::new();
+        for b in buckets {
+            done += b.completed;
+            failed += b.errors;
+            samples.extend_from_slice(&b.latencies);
+        }
+        samples.sort_unstable();
+        #[allow(clippy::cast_precision_loss)]
+        let seconds = buckets.len().max(1) as f64;
+        WindowStats {
+            error_rate: ratio(failed, done + failed),
+            p95_ms: percentile_sorted(&samples, 0.95),
+            throughput_rps: f64::from(done) / seconds,
+        }
+    }
+
+    /// First second after the fault from which two consecutive seconds look like the baseline.
+    fn recovery(&self, end_b: usize, before: &WindowStats) -> Option<f64> {
+        let healthy = |i: usize| {
+            let Some(b) = self.buckets.get(i) else {
+                return false;
+            };
+            let total = b.completed + b.errors;
+            if total == 0 {
+                return false;
+            }
+            let mut samples = b.latencies.clone();
+            samples.sort_unstable();
+            let p95 = percentile_sorted(&samples, 0.95);
+            let slack = (before.p95_ms * 1.25).max(before.p95_ms + 5.0);
+            ratio(b.errors, total) <= before.error_rate + 0.01
+                && (before.p95_ms == 0.0 || p95 <= slack)
+        };
+        (end_b..self.buckets.len().saturating_sub(1))
+            .find(|&i| healthy(i) && healthy(i + 1))
+            .map(|i| {
+                #[allow(clippy::cast_precision_loss)]
+                {
+                    (i - end_b) as f64
+                }
+            })
+    }
+}
+
+/// Workers able to serve right now: none while the node is down.
+fn available(state: &NodeState) -> usize {
+    if state.up { state.workers } else { 0 }
 }
 
 fn find_bottleneck(nodes: &[NodeReport]) -> Option<Bottleneck> {
-    let drops = |n: &NodeReport| n.rejected + n.timed_out;
+    let drops = |n: &NodeReport| n.rejected + n.timed_out + n.faulted;
     let worst = nodes
         .iter()
         .filter(|n| n.severity != Severity::Healthy)
@@ -495,6 +910,12 @@ fn find_bottleneck(nodes: &[NodeReport]) -> Option<Bottleneck> {
     }
     if worst.timed_out > 0 {
         reason.push_str(&format!(", {} requests timed out", worst.timed_out));
+    }
+    if worst.faulted > 0 {
+        reason.push_str(&format!(
+            ", {} requests lost to injected faults",
+            worst.faulted
+        ));
     }
     Some(Bottleneck {
         node_id: worst.id.clone(),

@@ -34,7 +34,7 @@ external dependencies for end users. **All simulation results are estimates.**
 | `pnpm bindings`                     | Regenerate `src/bindings.ts` from Rust     |
 | `pnpm check`                        | Everything above (same as CI, minus build) |
 
-## Features (Phases 2-3)
+## Features (Phases 2-5)
 
 - **Projects**: create, open, save, delete (stored locally in SQLite, in the OS app-data folder).
 - **Server profile**: OS, CPU cores/GHz, RAM, disk type + IOPS, network bandwidth/latency,
@@ -55,6 +55,19 @@ external dependencies for end users. **All simulation results are estimates.**
   queueing, drops and the bottleneck. Same seed and inputs give the same report on every
   platform. Results are estimates; see [ADR-004](docs/adr/ADR-004-simulation-engine.md) for the
   model and its assumptions.
+- **Design**: dark by default, light theme, or follow the system (toggle at the bottom of the sidebar).
+- **Chaos** (Chaos tab): schedule faults (crash and restart, slowdown, lost workers, extra latency,
+  packet loss or a full partition on a connection) and set how clients react (timeout, retries,
+  wait before retry). Reports show error rate and p95 before, during and after each fault and how
+  long recovery took; live runs shade the fault windows and show faults on the Stage. See
+  [ADR-007](docs/adr/ADR-007-chaos-and-client-policy.md).
+- **Stage** (Live run, default view): isometric scene of your topology. A crowd of users, dots flowing
+  along the edges, a glow and queue pile at busy nodes, and a dashed capacity column that fills as
+  utilization rises. Dots are illustrative (see [ADR-006](docs/adr/ADR-006-stage-visualization.md)).
+- **Live runs** (Simulate tab, Live run): the same simulation streamed once per simulated
+  second at 1x, 5x, 20x or max speed, with start/pause/resume/stop, throughput and p95 charts,
+  and per-node utilization, queue and drops. A finished live run produces the same report as an
+  instant run with the same seed. See [ADR-005](docs/adr/ADR-005-live-runs.md).
 
 ### Adding a template
 
@@ -72,13 +85,14 @@ src/                 React UI (presentation only)
   ipc/               Typed facade over the generated commands (CommandError)
   schemas/           zod form schemas + shared range fixture (limits.json)
   store/             Zustand project store
-  components/        Forms, project sidebar, template picker, topology/ (React Flow)
+  stage/             Isometric projection, layout, particle logic and canvas drawing
+  components/        Forms, project sidebar, template picker, simulation + live panels, SVG charts, topology/ (React Flow)
 src-tauri/src/
   commands/          Thin Tauri command handlers
   domain/            Pure domain types + validation (project, profiles, template, topology)
   storage/           SQLite connection, migrations, repositories
   runtime/           Host detection (sysinfo); embedded real mode later
-  sim/               Simulation engine (model, engine, seeded RNG, report)
+  sim/               Simulation engine (model, engine, seeded RNG, report, live runs)
   chaos/ export/     Later phases
   ipc.rs / error.rs  Command registry + binding export, typed AppError
 src-tauri/templates/ Embedded config template JSON
@@ -91,9 +105,9 @@ Rule: no business logic in the UI; commands only delegate to the Rust modules.
 
 1. Setup / CI / docs (done)
 2. Profile + templates + canvas (done)
-3. Simulation engine (current)
-4. Load generator + live metrics
-5. Chaos
+3. Simulation engine (done)
+4. Load generator + live metrics (done)
+5. Chaos (current)
 6. Real mode + calibration
 7. What-if
 8. Scenarios
@@ -102,4 +116,4 @@ Rule: no business logic in the UI; commands only delegate to the Rust modules.
 
 ## Documentation
 
-- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine
+- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos

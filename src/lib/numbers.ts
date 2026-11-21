@@ -25,3 +25,7 @@ export function stripNulls<T>(value: T): NoNull<T> {
   }
   return value as NoNull<T>;
 }
+
+export function last<T>(items: readonly T[]): T | undefined {
+  return items[items.length - 1];
+}

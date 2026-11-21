@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
+import { ChaosEditor } from "./components/ChaosEditor";
+import { Icon, type IconName } from "./components/Icon";
 import { ProjectSidebar } from "./components/ProjectSidebar";
-import { SimulationPanel } from "./components/SimulationPanel";
+import { SimulateTab } from "./components/SimulateTab";
 import { ServerProfileForm } from "./components/ServerProfileForm";
 import { TrafficProfileEditor } from "./components/TrafficProfileEditor";
 import { TopologyCanvas } from "./components/topology/TopologyCanvas";
 import { useProjectStore } from "./store/projectStore";
 
-type Tab = "server" | "traffic" | "topology" | "simulate";
+type Tab = "server" | "traffic" | "topology" | "chaos" | "simulate";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "server", label: "Server profile" },
-  { id: "traffic", label: "Traffic" },
-  { id: "topology", label: "Topology" },
-  { id: "simulate", label: "Simulate" },
+const TABS: { id: Tab; label: string; icon: IconName }[] = [
+  { id: "server", label: "Server profile", icon: "server" },
+  { id: "traffic", label: "Traffic", icon: "traffic" },
+  { id: "topology", label: "Topology", icon: "topology" },
+  { id: "chaos", label: "Chaos", icon: "bolt" },
+  { id: "simulate", label: "Simulate", icon: "play" },
 ];
 
 export default function App() {
@@ -51,8 +54,8 @@ export default function App() {
           </div>
         )}
         {current ? (
-          <div key={current.id}>
-            <header className="project-header">
+          <div key={current.id} className="workspace">
+            <header className="topbar">
               <input
                 aria-label="Project name"
                 value={current.name}
@@ -61,14 +64,17 @@ export default function App() {
                   store.rename(e.target.value);
                 }}
               />
+              <span className="status" data-dirty={store.dirty}>
+                {store.dirty ? "Unsaved changes" : "Saved"}
+              </span>
               <button
                 type="button"
+                className="primary"
                 onClick={() => void store.saveCurrent()}
                 disabled={store.busy || !store.dirty}
               >
                 Save
               </button>
-              <span className="muted">{store.dirty ? "Unsaved changes" : "Saved"}</span>
             </header>
             <div role="tablist" className="tabs">
               {TABS.map((t) => (
@@ -76,16 +82,18 @@ export default function App() {
                   key={t.id}
                   role="tab"
                   type="button"
+                  className="tab"
                   aria-selected={tab === t.id}
                   onClick={() => {
                     setTab(t.id);
                   }}
                 >
+                  <Icon name={t.icon} />
                   {t.label}
                 </button>
               ))}
             </div>
-            <section role="tabpanel">
+            <section role="tabpanel" className="page">
               {tab === "server" && (
                 <ServerProfileForm
                   value={current.serverProfile}
@@ -105,16 +113,26 @@ export default function App() {
                   onChange={store.setTopology}
                 />
               )}
-              {tab === "simulate" && <SimulationPanel project={current} />}
+              {tab === "chaos" && (
+                <ChaosEditor
+                  value={current.chaos}
+                  topology={current.topology}
+                  onChange={store.setChaos}
+                />
+              )}
+              {tab === "simulate" && <SimulateTab project={current} />}
             </section>
           </div>
         ) : (
           <div className="empty">
-            <h1>ArchLab</h1>
-            <p>Create or open a project to define a server, traffic and topology.</p>
+            <Icon name="logo" size={36} />
+            <h1>Plan capacity before you build</h1>
+            <p className="muted">
+              Create a project in the sidebar, describe your server, traffic and topology, then
+              simulate where it saturates.
+            </p>
           </div>
         )}
-        <footer className="muted">All simulation results are estimates.</footer>
       </main>
     </div>
   );

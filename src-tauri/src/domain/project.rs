@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
 
+use super::chaos::ChaosPlan;
 use super::server_profile::ServerProfile;
 use super::topology::Topology;
 use super::traffic::TrafficProfile;
@@ -17,6 +18,7 @@ pub struct Project {
     pub server_profile: ServerProfile,
     pub traffic_profile: TrafficProfile,
     pub topology: Topology,
+    pub chaos: ChaosPlan,
     /// Unix epoch milliseconds. Set by the storage layer on save.
     pub created_at: f64,
     pub updated_at: f64,
@@ -39,6 +41,7 @@ impl Project {
             server_profile: ServerProfile::default(),
             traffic_profile: TrafficProfile::default(),
             topology: Topology::starter(),
+            chaos: ChaosPlan::default(),
             created_at: 0.0,
             updated_at: 0.0,
         }
@@ -60,6 +63,7 @@ impl Project {
         issues.nested("serverProfile", self.server_profile.validate());
         issues.nested("trafficProfile", self.traffic_profile.validate());
         issues.nested("topology", self.topology.validate());
+        issues.nested("chaos", self.chaos.validate(&self.topology));
         issues.finish()
     }
 }
@@ -84,6 +88,14 @@ mod tests {
             fields,
             ["name", "serverProfile.cpuCores", "topology.nodes.0.label"]
         );
+    }
+
+    #[test]
+    fn chaos_issues_are_prefixed() {
+        let mut p = Project::new("Demo");
+        p.chaos.policy.max_retries = 99;
+        let err = p.validate().expect_err("invalid");
+        assert_eq!(err.issues[0].field, "chaos.policy.maxRetries");
     }
 
     #[test]

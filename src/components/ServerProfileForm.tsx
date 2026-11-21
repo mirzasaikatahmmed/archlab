@@ -10,6 +10,8 @@ import {
   type ServerProfileValues,
 } from "../schemas/serverProfile";
 import { FormField } from "./FormField";
+import { Icon } from "./Icon";
+import { Section } from "./Section";
 
 interface Props {
   value: ServerProfile;
@@ -63,13 +65,13 @@ export function ServerProfileForm({ value, onChange }: Props) {
 
   return (
     <form
-      className="form-grid"
+      className="form-page"
       onSubmit={(e) => {
         e.preventDefault();
       }}
       noValidate
     >
-      <div className="form-actions">
+      <div className="page-actions">
         <button
           type="button"
           onClick={() => {
@@ -77,8 +79,10 @@ export function ServerProfileForm({ value, onChange }: Props) {
           }}
           disabled={detecting}
         >
+          <Icon name="detect" />
           {detecting ? "Detecting…" : "Detect this machine"}
         </button>
+        <span className="muted">Fills the form from this computer. Review the notes it lists.</span>
       </div>
       {detectError && <p role="alert">Detection failed: {detectError}</p>}
       {notes.length > 0 && (
@@ -89,61 +93,72 @@ export function ServerProfileForm({ value, onChange }: Props) {
         </ul>
       )}
 
-      <FormField label="Operating system" htmlFor="os" error={errors.os?.message}>
-        <select id="os" {...register("os")}>
-          <option value="linux">Linux</option>
-          <option value="macOs">macOS</option>
-          <option value="windows">Windows</option>
-          <option value="other">Other</option>
-        </select>
-      </FormField>
-      <FormField label="CPU cores" htmlFor="cpuCores" error={errors.cpuCores?.message}>
-        <input id="cpuCores" type="number" step="1" {...num("cpuCores")} />
-      </FormField>
-      <FormField label="CPU clock (GHz)" htmlFor="cpuGhz" error={errors.cpuGhz?.message}>
-        <input id="cpuGhz" type="number" step="0.1" {...num("cpuGhz")} />
-      </FormField>
-      <FormField label="RAM (GB)" htmlFor="ramGb" error={errors.ramGb?.message}>
-        <input id="ramGb" type="number" step="0.25" {...num("ramGb")} />
-      </FormField>
-      <FormField label="Disk type" htmlFor="diskKind" error={errors.disk?.kind?.message}>
-        <select id="diskKind" {...register("disk.kind")}>
-          <option value="hdd">HDD</option>
-          <option value="ssd">SSD</option>
-          <option value="nvme">NVMe</option>
-        </select>
-      </FormField>
-      <FormField label="Disk IOPS" htmlFor="diskIops" error={errors.disk?.iops?.message}>
-        <input id="diskIops" type="number" step="1" {...num("disk.iops")} />
-      </FormField>
-      <FormField
-        label="Network bandwidth (Mbps)"
-        htmlFor="bandwidthMbps"
-        error={errors.network?.bandwidthMbps?.message}
-      >
-        <input id="bandwidthMbps" type="number" step="any" {...num("network.bandwidthMbps")} />
-      </FormField>
-      <FormField
-        label="Network latency (ms)"
-        htmlFor="latencyMs"
-        error={errors.network?.latencyMs?.message}
-      >
-        <input id="latencyMs" type="number" step="any" {...num("network.latencyMs")} />
-      </FormField>
-      <FormField
-        label="Virtualization"
-        htmlFor="virtualization"
-        error={errors.virtualization?.message}
-      >
-        <select id="virtualization" {...register("virtualization")}>
-          <option value="bareMetal">Bare metal</option>
-          <option value="vm">Virtual machine</option>
-          <option value="container">Container</option>
-        </select>
-      </FormField>
-      <FormField label="File descriptor limit" htmlFor="fdLimit" error={errors.fdLimit?.message}>
-        <input id="fdLimit" type="number" step="1" {...num("fdLimit")} />
-      </FormField>
+      <Section title="Compute" description="Sets how fast each request is processed.">
+        <FormField label="Operating system" htmlFor="os" error={errors.os?.message}>
+          <select id="os" {...register("os")}>
+            <option value="linux">Linux</option>
+            <option value="macOs">macOS</option>
+            <option value="windows">Windows</option>
+            <option value="other">Other</option>
+          </select>
+        </FormField>
+        <FormField
+          label="Virtualization"
+          htmlFor="virtualization"
+          error={errors.virtualization?.message}
+        >
+          <select id="virtualization" {...register("virtualization")}>
+            <option value="bareMetal">Bare metal</option>
+            <option value="vm">Virtual machine</option>
+            <option value="container">Container</option>
+          </select>
+        </FormField>
+        <FormField label="CPU cores" htmlFor="cpuCores" error={errors.cpuCores?.message}>
+          <input id="cpuCores" type="number" step="1" {...num("cpuCores")} />
+        </FormField>
+        <FormField label="CPU clock (GHz)" htmlFor="cpuGhz" error={errors.cpuGhz?.message}>
+          <input id="cpuGhz" type="number" step="0.1" {...num("cpuGhz")} />
+        </FormField>
+        <FormField label="RAM (GB)" htmlFor="ramGb" error={errors.ramGb?.message}>
+          <input id="ramGb" type="number" step="0.25" {...num("ramGb")} />
+        </FormField>
+      </Section>
+
+      <Section title="Storage" description="Limits databases and anything that waits on disk.">
+        <FormField label="Disk type" htmlFor="diskKind" error={errors.disk?.kind?.message}>
+          <select id="diskKind" {...register("disk.kind")}>
+            <option value="hdd">HDD</option>
+            <option value="ssd">SSD</option>
+            <option value="nvme">NVMe</option>
+          </select>
+        </FormField>
+        <FormField label="Disk IOPS" htmlFor="diskIops" error={errors.disk?.iops?.message}>
+          <input id="diskIops" type="number" step="1" {...num("disk.iops")} />
+        </FormField>
+      </Section>
+
+      <Section title="Network" description="Adds delay to every hop between nodes.">
+        <FormField
+          label="Network bandwidth (Mbps)"
+          htmlFor="bandwidthMbps"
+          error={errors.network?.bandwidthMbps?.message}
+        >
+          <input id="bandwidthMbps" type="number" step="any" {...num("network.bandwidthMbps")} />
+        </FormField>
+        <FormField
+          label="Network latency (ms)"
+          htmlFor="latencyMs"
+          error={errors.network?.latencyMs?.message}
+        >
+          <input id="latencyMs" type="number" step="any" {...num("network.latencyMs")} />
+        </FormField>
+      </Section>
+
+      <Section title="Limits" description="Caps how many connections a node can hold open.">
+        <FormField label="File descriptor limit" htmlFor="fdLimit" error={errors.fdLimit?.message}>
+          <input id="fdLimit" type="number" step="1" {...num("fdLimit")} />
+        </FormField>
+      </Section>
     </form>
   );
 }

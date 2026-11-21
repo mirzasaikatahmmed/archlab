@@ -1,15 +1,63 @@
 {
   "serverProfile": [
-    { "path": "cpuCores", "min": 1, "max": 1024, "below": 0, "above": 1025 },
-    { "path": "cpuGhz", "min": 0.1, "max": 10, "below": 0.09, "above": 10.01 },
-    { "path": "ramGb", "min": 0.25, "max": 16384, "below": 0.24, "above": 16384.01 },
-    { "path": "disk.iops", "min": 1, "max": 10000000, "below": 0, "above": 10000001 },
-    { "path": "network.bandwidthMbps", "min": 1, "max": 1000000, "below": 0.5, "above": 1000000.5 },
-    { "path": "network.latencyMs", "min": 0, "max": 10000, "below": -0.1, "above": 10000.1 },
-    { "path": "fdLimit", "min": 16, "max": 10000000, "below": 15, "above": 10000001 }
+    {
+      "path": "cpuCores",
+      "min": 1,
+      "max": 1024,
+      "below": 0,
+      "above": 1025
+    },
+    {
+      "path": "cpuGhz",
+      "min": 0.1,
+      "max": 10,
+      "below": 0.09,
+      "above": 10.01
+    },
+    {
+      "path": "ramGb",
+      "min": 0.25,
+      "max": 16384,
+      "below": 0.24,
+      "above": 16384.01
+    },
+    {
+      "path": "disk.iops",
+      "min": 1,
+      "max": 10000000,
+      "below": 0,
+      "above": 10000001
+    },
+    {
+      "path": "network.bandwidthMbps",
+      "min": 1,
+      "max": 1000000,
+      "below": 0.5,
+      "above": 1000000.5
+    },
+    {
+      "path": "network.latencyMs",
+      "min": 0,
+      "max": 10000,
+      "below": -0.1,
+      "above": 10000.1
+    },
+    {
+      "path": "fdLimit",
+      "min": 16,
+      "max": 10000000,
+      "below": 15,
+      "above": 10000001
+    }
   ],
   "trafficProfile": [
-    { "path": "concurrentUsers", "min": 1, "max": 100000000, "below": 0, "above": 100000001 },
+    {
+      "path": "concurrentUsers",
+      "min": 1,
+      "max": 100000000,
+      "below": 0,
+      "above": 100000001
+    },
     {
       "path": "requestsPerSecond",
       "min": 0.001,
@@ -17,6 +65,85 @@
       "below": 0.0005,
       "above": 10000000.5
     },
-    { "path": "readRatio", "min": 0, "max": 1, "below": -0.01, "above": 1.01 }
+    {
+      "path": "readRatio",
+      "min": 0,
+      "max": 1,
+      "below": -0.01,
+      "above": 1.01
+    }
+  ],
+  "clientPolicy": [
+    {
+      "path": "timeoutMs",
+      "min": 50,
+      "max": 120000,
+      "below": 49,
+      "above": 120001
+    },
+    {
+      "path": "maxRetries",
+      "min": 0,
+      "max": 5,
+      "below": -1,
+      "above": 6
+    },
+    {
+      "path": "backoffMs",
+      "min": 0,
+      "max": 10000,
+      "below": -1,
+      "above": 10001
+    }
+  ],
+  "faultTiming": [
+    {
+      "path": "startS",
+      "min": 0,
+      "max": 86400,
+      "below": -1,
+      "above": 86401
+    },
+    {
+      "path": "durationS",
+      "min": 0.001,
+      "max": 3600,
+      "below": 0,
+      "above": 3601
+    }
+  ],
+  "faultParams": [
+    {
+      "kind": "slowdown",
+      "path": "kind.factor",
+      "min": 1,
+      "max": 100,
+      "below": 0.99,
+      "above": 100.01
+    },
+    {
+      "kind": "lostWorkers",
+      "path": "kind.fraction",
+      "min": 0.05,
+      "max": 0.95,
+      "below": 0.04,
+      "above": 0.96
+    },
+    {
+      "kind": "edgeLatency",
+      "path": "kind.extraMs",
+      "min": 0,
+      "max": 10000,
+      "below": -1,
+      "above": 10001
+    },
+    {
+      "kind": "edgeLoss",
+      "path": "kind.loss",
+      "min": 0,
+      "max": 1,
+      "below": -0.01,
+      "above": 1.01
+    }
   ]
 }

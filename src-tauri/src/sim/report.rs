@@ -71,6 +71,8 @@ pub struct Summary {
     pub completed: u32,
     /// Requests dropped because a queue was full or the timeout expired.
     pub errors: u32,
+    /// Extra attempts sent after a failure (see the client policy).
+    pub retries: u32,
     pub throughput_rps: f64,
     pub error_rate: f64,
     pub latency: Latency,
@@ -90,6 +92,8 @@ pub struct NodeReport {
     pub completed: u32,
     pub rejected: u32,
     pub timed_out: u32,
+    /// Requests lost to an injected fault: a crash on this node or packet loss on a link into it.
+    pub faulted: u32,
     /// Fraction of worker time spent busy, 0..=1.
     pub utilization: f64,
     pub mean_queue: f64,
@@ -119,6 +123,31 @@ pub struct TimelinePoint {
     pub p95_ms: f64,
 }
 
+/// How the system behaved over a stretch of whole seconds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowStats {
+    pub error_rate: f64,
+    pub p95_ms: f64,
+    pub throughput_rps: f64,
+}
+
+/// Effect of one injected fault, compared with equally long windows before and after it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FaultImpact {
+    pub fault_id: String,
+    pub label: String,
+    pub start_s: f64,
+    pub end_s: f64,
+    pub before: WindowStats,
+    pub during: WindowStats,
+    pub after: WindowStats,
+    /// Seconds after the fault ended until errors and p95 returned to the pre-fault level;
+    /// absent if the run ended first or the system never recovered.
+    pub recovery_s: Option<f64>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SimReport {
@@ -130,6 +159,34 @@ pub struct SimReport {
     pub nodes: Vec<NodeReport>,
     pub bottleneck: Option<Bottleneck>,
     pub timeline: Vec<TimelinePoint>,
+    pub faults: Vec<FaultImpact>,
     /// Modelling assumptions that affected this run.
     pub assumptions: Vec<String>,
+}
+
+/// Live view of one node, taken at the end of a simulated second.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveNodeTick {
+    pub id: String,
+    /// Busy share of worker time during the last second, 0..=1.
+    pub utilization: f64,
+    /// Requests waiting right now.
+    pub queue: u32,
+    /// Workers busy right now.
+    pub busy: u32,
+    /// Requests dropped since the run started.
+    pub dropped: u32,
+}
+
+/// Pushed to the UI once per simulated second during a live run.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveTick {
+    pub point: TimelinePoint,
+    pub nodes: Vec<LiveNodeTick>,
+    /// Share of the run completed, 0..=1.
+    pub progress: f64,
+    /// Ids of the faults in effect right now.
+    pub active_faults: Vec<String>,
 }
