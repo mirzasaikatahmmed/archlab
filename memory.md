@@ -15,11 +15,12 @@ rusqlite_migration, `ProjectRepository`), runtime/detect (sysinfo), sim/ (model 
 
 ## Current state
 
-Phases 1-7 committed (5 commits on `feat/phase-7-what-if`, unpushed). Phase 8 (scenarios + suggestions) is
-implemented on `feat/phase-8-scenarios`, UNCOMMITTED. GUI never run by hand (`pnpm tauri dev`); visuals checked only
+Phases 1-8 committed locally, unpushed (Phase 8 = `db42156` on `feat/phase-8-scenarios`). Phase 9 (export) is
+implemented on `feat/phase-9-export`, UNCOMMITTED. GUI never run by hand (`pnpm tauri dev`); visuals checked only
 in headless Chrome with a mocked backend; real-mode timing only in Rust tests; sim-vs-real divergence not measured by
-the user. Release builds needed for meaningful calibration. Next: Phase 9 (export JSON/Markdown/SVG/WebM; scenario
-import/export), then Phase 10 (packaging, signing, auto-update).
+the user. Release builds needed for meaningful calibration. Video needs a system ffmpeg (libvpx-vp9); not
+yet run end to end with a real ffmpeg (none installed here; encoder tested with a fake script). Next: Phase 10
+(packaging incl. bundling ffmpeg sidecar, signing, auto-update). Scenario import/export deferred.
 
 ## Key decisions
 
@@ -63,6 +64,10 @@ import/export), then Phase 10 (packaging, signing, auto-update).
 - specta forbids 64-bit ints: use u32/f64 in IPC types (timestamps = epoch ms as f64).
 - @xyflow/react 13: use `useNodesState`/`useEdgesState` (no applyNodeChanges export).
 - Keep `@tauri-apps/api` on the same minor as the `tauri` crate (2.11): `tauri build` fails on mismatch.
+- Export (ADR-011): `export/` = project_file, markdown, svg, video (ffmpeg child, stdin RGBA). Files are written
+  only by `export::write_text` with a fixed extension; dialogs are Rust (`rfd`), not a tauri plugin (the dialog
+  plugin needs tauri 2.12). `video_frame` is a raw-body command outside the typed registry (see lib.rs).
+  After `drawScene` reset transform/textAlign before drawing overlays (it leaves them set).
 - sysinfo 0.40: `System::new()` and `Disks::new_with_refreshed_list()` return `Result`.
 
 ## Setup and run
@@ -71,4 +76,4 @@ See README. `pnpm check` runs all checks; `pnpm tauri dev` runs the app.
 
 ## Last updated
 
-2026-11-22: Phase 8 scenarios (5 guided stories, player) and what-if suggestions.
+2026-11-22: Phase 9 export (JSON, Markdown, SVG, WebM via ffmpeg), project import; branch feat/phase-9-export.

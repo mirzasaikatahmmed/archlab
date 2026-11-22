@@ -4,6 +4,7 @@ import { calm, conditionsFor, withEdgeLoss, type Conditions } from "../stage/con
 import { drawScene, readPalette, type Palette } from "../stage/draw";
 import { fitScene, type Size } from "../stage/iso";
 import { sceneExtent, sceneNodes } from "../stage/layout";
+import { loadsFrom } from "../stage/loads";
 import {
   IDLE_LOAD,
   buildGraph,
@@ -34,31 +35,6 @@ function prefersReducedMotion(): boolean {
   return typeof window.matchMedia === "function"
     ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
     : false;
-}
-
-/** Loads for each topology node. Clients have no metrics: their "queue" sizes the crowd. */
-function loadsFrom(
-  topology: Topology,
-  latest: LiveTick | undefined,
-  previousDropped: Map<string, number>,
-): NodeLoad[] {
-  const offered = latest?.point.offeredRps ?? 0;
-  const byId = new Map(latest?.nodes.map((n) => [n.id, n]));
-  return topology.nodes.map((n) => {
-    if (n.kind === "client") {
-      return { ...IDLE_LOAD, queue: Math.min(40, offered / 10) };
-    }
-    const tick = byId.get(n.id);
-    if (!tick) {
-      return IDLE_LOAD;
-    }
-    const delta = Math.max(0, tick.dropped - (previousDropped.get(n.id) ?? 0));
-    return {
-      utilization: tick.utilization ?? 0,
-      queue: tick.queue,
-      dropFraction: Math.min(1, delta / Math.max(1, offered)),
-    };
-  });
 }
 
 /**

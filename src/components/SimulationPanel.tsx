@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ExportBar } from "./ExportBar";
 import type { Project, SimReport } from "../bindings";
 import { CommandError, api, describeError } from "../ipc";
 import { Icon } from "./Icon";
@@ -74,6 +75,7 @@ export function SimulationPanel({ project }: Props) {
         </button>
       </div>
       {error && <p role="alert">{error}</p>}
+      <ExportBar project={project} report={report} />
       {report && <ReportView report={report} />}
     </div>
   );

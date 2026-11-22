@@ -6,9 +6,10 @@ import { chaosPlan, serverProfile, topology, trafficProfile, whatIfPlan } from "
 
 const startLiveRun = vi.hoisted(() => vi.fn());
 const controlLiveRun = vi.hoisted(() => vi.fn());
+const videoAvailable = vi.hoisted(() => vi.fn(() => Promise.resolve(false)));
 vi.mock("../ipc", async (importActual) => {
   const actual = await importActual<typeof import("../ipc")>();
-  return { ...actual, api: { startLiveRun, controlLiveRun } };
+  return { ...actual, api: { startLiveRun, controlLiveRun, videoAvailable } };
 });
 
 import { CommandError } from "../ipc";

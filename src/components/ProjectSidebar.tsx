@@ -13,6 +13,8 @@ interface Props {
   /** Opens the scenario library; the button is hidden when absent. */
   onOpenScenarios?: () => void;
   scenariosActive?: boolean;
+  /** Opens a project file; the button is hidden when absent. */
+  onImport?: () => void;
 }
 
 export function ProjectSidebar({
@@ -24,6 +26,7 @@ export function ProjectSidebar({
   onDelete,
   onOpenScenarios,
   scenariosActive = false,
+  onImport,
 }: Props) {
   const [name, setName] = useState("");
   const trimmed = name.trim();
@@ -70,6 +73,12 @@ export function ProjectSidebar({
           Create
         </button>
       </form>
+      {onImport && (
+        <button type="button" className="nav-button" disabled={busy} onClick={onImport}>
+          <Icon name="upload" />
+          Import project
+        </button>
+      )}
       {projects.length === 0 ? (
         <p className="muted">No projects yet.</p>
       ) : (

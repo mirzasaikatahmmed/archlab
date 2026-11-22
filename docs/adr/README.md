@@ -12,3 +12,4 @@
 | [008](ADR-008-real-mode-and-calibration.md) | Real mode on localhost, calibration          | Accepted |
 | [009](ADR-009-what-if-analysis.md)          | What-if analysis                             | Accepted |
 | [010](ADR-010-guided-scenarios.md)          | Guided scenarios and suggestions             | Accepted |
+| [011](ADR-011-export.md)                    | Export: JSON, Markdown, SVG, WebM            | Accepted |

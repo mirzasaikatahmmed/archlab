@@ -4,6 +4,7 @@ import { last } from "../lib/numbers";
 import { levelFor } from "../lib/severity";
 import { useLiveRun } from "../lib/useLiveRun";
 import { FAULT_LABELS } from "../schemas/chaos";
+import { ExportBar } from "./ExportBar";
 import { Icon } from "./Icon";
 import { LineChart, type Band } from "./LineChart";
 import { ReportView, UtilBar, pct } from "./ReportView";
@@ -209,6 +210,11 @@ export function LivePanel({ project }: Props) {
           </ul>
         </>
       )}
+      <ExportBar
+        project={project}
+        report={report}
+        ticks={status === "finished" ? ticks : undefined}
+      />
       {report && <ReportView report={report} />}
     </div>
   );

@@ -69,4 +69,23 @@ describe("ProjectSidebar", () => {
     await userEvent.click(button);
     expect(onOpenScenarios).toHaveBeenCalled();
   });
+
+  it("offers project import only when a handler is given", async () => {
+    const { rerender } = render(
+      <ProjectSidebar projects={[]} currentId={null} busy={false} {...handlers()} />,
+    );
+    expect(screen.queryByRole("button", { name: "Import project" })).not.toBeInTheDocument();
+    const onImport = vi.fn();
+    rerender(
+      <ProjectSidebar
+        projects={[]}
+        currentId={null}
+        busy={false}
+        {...handlers()}
+        onImport={onImport}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Import project" }));
+    expect(onImport).toHaveBeenCalledTimes(1);
+  });
 });

@@ -9,6 +9,8 @@ const api = vi.hoisted(() => ({
   createProject: vi.fn(),
   saveProject: vi.fn(),
   deleteProject: vi.fn(),
+  pickOpenPath: vi.fn(),
+  importProjectFile: vi.fn(),
 }));
 
 vi.mock("../ipc", async () => {
@@ -126,6 +128,30 @@ describe("projectStore", () => {
     expect(state.current?.id).toBe("scenario-step");
     expect(state.dirty).toBe(false);
     expect(state.projects).toHaveLength(1);
+  });
+
+  it("imports a project file as a new saved project, and does nothing when cancelled", async () => {
+    api.pickOpenPath.mockResolvedValueOnce(null);
+    expect(await useProjectStore.getState().importFile()).toBe(false);
+    expect(api.importProjectFile).not.toHaveBeenCalled();
+
+    const fresh: Project = { ...project, id: "fresh" };
+    api.pickOpenPath.mockResolvedValueOnce("/tmp/demo.archlab.json");
+    api.importProjectFile.mockResolvedValue(fresh);
+    api.saveProject.mockResolvedValue(fresh);
+    expect(await useProjectStore.getState().importFile()).toBe(true);
+    expect(api.importProjectFile).toHaveBeenCalledWith("/tmp/demo.archlab.json");
+    expect(useProjectStore.getState().current?.id).toBe("fresh");
+  });
+
+  it("reports a bad project file and opens nothing", async () => {
+    api.pickOpenPath.mockResolvedValue("/tmp/bad.archlab.json");
+    api.importProjectFile.mockRejectedValue(
+      new CommandError({ kind: "runtime", message: "this is not an ArchLab project" }),
+    );
+    expect(await useProjectStore.getState().importFile()).toBe(false);
+    expect(useProjectStore.getState().error).toContain("not an ArchLab project");
+    expect(api.saveProject).not.toHaveBeenCalled();
   });
 
   it("exposes Rust validation issues from a failed save", async () => {

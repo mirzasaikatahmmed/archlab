@@ -8,6 +8,7 @@ external dependencies for end users. **All simulation results are estimates.**
 ## Tech stack
 
 - [Tauri v2](https://v2.tauri.app/) + Rust core; rusqlite (bundled SQLite) + rusqlite_migration; sysinfo
+- `rfd` native file dialogs; ffmpeg (external program) for WebM export
 - tauri-specta generated TypeScript bindings (`src/bindings.ts`)
 - Vite + React + TypeScript UI, pnpm; React Flow (`@xyflow/react`), react-hook-form + zod, Zustand
 - ESLint (typescript-eslint), Prettier, Vitest + Testing Library; rustfmt, clippy, `cargo test`
@@ -34,7 +35,7 @@ external dependencies for end users. **All simulation results are estimates.**
 | `pnpm bindings`                     | Regenerate `src/bindings.ts` from Rust     |
 | `pnpm check`                        | Everything above (same as CI, minus build) |
 
-## Features (Phases 2-8)
+## Features (Phases 2-9)
 
 - **Projects**: create, open, save, delete (stored locally in SQLite, in the OS app-data folder).
 - **Server profile**: OS, CPU cores/GHz, RAM, disk type + IOPS, network bandwidth/latency,
@@ -87,6 +88,13 @@ external dependencies for end users. **All simulation results are estimates.**
   and per-node utilization, queue and drops. A finished live run produces the same report as an
   instant run with the same seed. See [ADR-005](docs/adr/ADR-005-live-runs.md).
 
+- **Export** (Simulate tab, below the run controls): save the project as an `.archlab.json` file,
+  the result as a Markdown report, the topology as an SVG diagram (coloured by status after a
+  run), and a finished live run as a 1080p30 WebM video. **Import project** (sidebar) opens a
+  project file as a new project. Video needs [ffmpeg](https://ffmpeg.org/) with libvpx-vp9 on
+  this computer, found via `ARCHLAB_FFMPEG`, next to the app, or on `PATH`. See
+  [ADR-011](docs/adr/ADR-011-export.md).
+
 ### Adding a template
 
 1. Add `src-tauri/templates/<id>.json` (copy an existing one; `id`, `version`, `nodeKinds`,
@@ -112,7 +120,7 @@ src-tauri/src/
   runtime/           Host detection (sysinfo), calibration benchmarks, real mode (tokio, localhost)
   sim/               Simulation engine (model, engine, seeded RNG, report, live runs)
   whatif/            What-if runner: compare, sweep, capacity search
-  chaos/ export/     Later phases
+  export/            Project file, Markdown, SVG and ffmpeg video encoder
   ipc.rs / error.rs  Command registry + binding export, typed AppError
 src-tauri/templates/ Embedded config template JSON
 src-tauri/scenarios/ Embedded guided scenario JSON
@@ -130,10 +138,10 @@ Rule: no business logic in the UI; commands only delegate to the Rust modules.
 5. Chaos (done)
 6. Real mode + calibration (done)
 7. What-if (done)
-8. Scenarios (current)
-9. Export (JSON, Markdown, SVG, WebM; PDF later)
+8. Scenarios (done)
+9. Export (JSON, Markdown, SVG, WebM; PDF later) (current)
 10. Packaging, signing, auto-update
 
 ## Documentation
 
-- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode, ADR-009 what-if, ADR-010 scenarios
+- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode, ADR-009 what-if, ADR-010 scenarios, ADR-011 export

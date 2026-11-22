@@ -56,6 +56,13 @@ export default function App() {
           setView({ kind: "library" });
         }}
         scenariosActive={view.kind !== "project"}
+        onImport={() => {
+          void store.importFile().then((opened) => {
+            if (opened) {
+              setView({ kind: "project" });
+            }
+          });
+        }}
       />
       <main className="main">
         {store.error && (

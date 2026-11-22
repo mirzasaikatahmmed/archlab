@@ -1,6 +1,7 @@
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
+use crate::export::video::Encoder;
 use crate::runtime::jobs::JobSlot;
 use crate::sim::live::LiveRuns;
 use crate::storage::{CalibrationRepository, ProjectRepository};
@@ -13,6 +14,8 @@ pub struct AppState {
     pub calibration_job: JobSlot,
     pub real_job: JobSlot,
     pub whatif_job: JobSlot,
+    /// The video being written, if any.
+    pub video: Mutex<Option<Encoder>>,
     /// Scratch folder for the disk benchmark.
     pub scratch_dir: PathBuf,
 }

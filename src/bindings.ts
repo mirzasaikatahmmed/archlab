@@ -40,6 +40,24 @@ export const commands = {
 	getScenario: (id: string, options?: InvokeOptions) => typedError<ScenarioView, AppError>(__TAURI_INVOKE("get_scenario", { id }, options)),
 	/**  The design as it stands after `step` (counting from 0), as a new unsaved project. */
 	scenarioStepProject: (id: string, step: number, options?: InvokeOptions) => typedError<Project, AppError>(__TAURI_INVOKE("scenario_step_project", { id, step }, options)),
+	/**  Asks where to save. `None` means the person cancelled. */
+	pickSavePath: (kind: ExportKind, fileName: string, options?: InvokeOptions) => typedError<string | null, AppError>(__TAURI_INVOKE("pick_save_path", { kind, fileName }, options)),
+	/**  Asks which project file to open. `None` means the person cancelled. */
+	pickOpenPath: (options?: InvokeOptions) => typedError<string | null, AppError>(__TAURI_INVOKE("pick_open_path", undefined, options)),
+	/**  Saves the project, and the report of its last run if given, as an `.archlab.json` file. */
+	exportProjectJson: (path: string, project: Project, report: SimReport | null, options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("export_project_json", { path, project, report }, options)),
+	exportMarkdown: (path: string, project: Project, report: SimReport | null, options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("export_markdown", { path, project, report }, options)),
+	exportSvg: (path: string, project: Project, report: SimReport | null, options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("export_svg", { path, project, report }, options)),
+	/**  Reads an `.archlab.json` file as a new, unsaved project. */
+	importProjectFile: (path: string, options?: InvokeOptions) => typedError<Project, AppError>(__TAURI_INVOKE("import_project_file", { path }, options)),
+	/**  Whether an ffmpeg program was found, so the UI can explain a missing one up front. */
+	videoAvailable: (options?: InvokeOptions) => __TAURI_INVOKE<boolean>("video_available", undefined, options),
+	/**  Opens an encoder for `path`. Frames follow through [`video_frame`]. */
+	videoStart: (path: string, width: number, height: number, fps: number, options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("video_start", { path, width, height, fps }, options)),
+	/**  Closes the video and returns the number of frames in it. */
+	videoFinish: (options?: InvokeOptions) => typedError<number, AppError>(__TAURI_INVOKE("video_finish", undefined, options)),
+	/**  Stops the video and removes the partial file. Does nothing if none is open. */
+	videoCancel: (options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("video_cancel", undefined, options)),
 };
 
 /* Types */
@@ -174,6 +192,9 @@ export type DiskProfile = {
 	kind: DiskKind,
 	iops: number,
 };
+
+/**  What a Save dialog is for; decides the file filter and the extension. */
+export type ExportKind = "json" | "markdown" | "svg" | "video";
 
 export type Fault = {
 	id: string,

@@ -27,6 +27,8 @@ interface ProjectState {
   deleteProject: (id: string) => Promise<void>;
   /** Saves a project that was built elsewhere, such as a scenario step, and opens it. */
   importProject: (project: Project) => Promise<void>;
+  /** Asks for an `.archlab.json` file and opens it as a new project; false if cancelled or failed. */
+  importFile: () => Promise<boolean>;
   closeProject: () => void;
   rename: (name: string) => void;
   setServerProfile: (profile: ServerProfile) => void;
@@ -88,6 +90,20 @@ export const useProjectStore = create<ProjectState>()((set, get) => {
         const saved = await api.saveProject(project);
         set({ current: saved, dirty: false, projects: await api.listProjects() });
       }),
+
+    importFile: async () => {
+      let opened = false;
+      await run(async () => {
+        const path = await api.pickOpenPath();
+        if (path === null) {
+          return;
+        }
+        const saved = await api.saveProject(await api.importProjectFile(path));
+        set({ current: saved, dirty: false, projects: await api.listProjects() });
+        opened = true;
+      });
+      return opened;
+    },
 
     openProject: (id) =>
       run(async () => {

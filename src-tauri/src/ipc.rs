@@ -4,7 +4,7 @@ use specta_typescript::Typescript;
 use tauri_specta::{Builder, ErrorHandlingMode, collect_commands};
 
 use crate::commands::{
-    app, calibration, detect, project, real, scenarios, simulation, templates, whatif,
+    app, calibration, detect, export, project, real, scenarios, simulation, templates, whatif,
 };
 
 pub fn builder() -> Builder<tauri::Wry> {
@@ -32,6 +32,16 @@ pub fn builder() -> Builder<tauri::Wry> {
             scenarios::list_scenarios,
             scenarios::get_scenario,
             scenarios::scenario_step_project,
+            export::pick_save_path,
+            export::pick_open_path,
+            export::export_project_json,
+            export::export_markdown,
+            export::export_svg,
+            export::import_project_file,
+            export::video_available,
+            export::video_start,
+            export::video_finish,
+            export::video_cancel,
         ])
         .error_handling(ErrorHandlingMode::Result)
         .disable_serde_phases()

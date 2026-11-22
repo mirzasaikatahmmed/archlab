@@ -5,9 +5,10 @@ import type { Project, SimReport } from "../bindings";
 import { chaosPlan, serverProfile, topology, trafficProfile, whatIfPlan } from "../test/fixtures";
 
 const runSimulation = vi.hoisted(() => vi.fn());
+const videoAvailable = vi.hoisted(() => vi.fn(() => Promise.resolve(false)));
 vi.mock("../ipc", async (importActual) => {
   const actual = await importActual<typeof import("../ipc")>();
-  return { ...actual, api: { runSimulation } };
+  return { ...actual, api: { runSimulation, videoAvailable } };
 });
 
 import { CommandError } from "../ipc";

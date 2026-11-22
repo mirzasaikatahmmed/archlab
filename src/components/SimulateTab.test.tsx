@@ -8,7 +8,12 @@ vi.mock("../ipc", async (importActual) => {
   const actual = await importActual<typeof import("../ipc")>();
   return {
     ...actual,
-    api: { runSimulation: vi.fn(), startLiveRun: vi.fn(), controlLiveRun: vi.fn() },
+    api: {
+      runSimulation: vi.fn(),
+      startLiveRun: vi.fn(),
+      controlLiveRun: vi.fn(),
+      videoAvailable: vi.fn(() => Promise.resolve(false)),
+    },
   };
 });
 

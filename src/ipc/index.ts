@@ -1,4 +1,4 @@
-import { Channel } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import {
   commands,
   type AppError,
@@ -6,6 +6,7 @@ import {
   type Calibration,
   type CalibrationEvent,
   type ConfigTemplate,
+  type ExportKind,
   type DetectedProfile,
   type FieldIssue,
   type LiveCommand,
@@ -24,6 +25,7 @@ import {
 
 export type {
   AppError,
+  ExportKind,
   FieldIssue,
   LiveCommand,
   LiveEvent,
@@ -58,6 +60,10 @@ export function describeError(error: AppError): string {
     case "runtime":
       return error.message;
   }
+}
+
+function isAppError(value: unknown): value is AppError {
+  return typeof value === "object" && value !== null && "kind" in value;
 }
 
 type Result<T> = { status: "ok"; data: T } | { status: "error"; error: AppError };
@@ -132,4 +138,30 @@ export const api = {
   /** The design after `step` (counting from 0) of a scenario, as a new unsaved project. */
   scenarioStepProject: (id: string, step: number): Promise<Project> =>
     unwrap(commands.scenarioStepProject(id, step)),
+  /** Opens a Save dialog; null when cancelled. */
+  pickSavePath: (kind: ExportKind, fileName: string): Promise<string | null> =>
+    unwrap(commands.pickSavePath(kind, fileName)),
+  /** Opens a dialog for a project file; null when cancelled. */
+  pickOpenPath: (): Promise<string | null> => unwrap(commands.pickOpenPath()),
+  exportProjectJson: (path: string, project: Project, report: SimReport | null): Promise<null> =>
+    unwrap(commands.exportProjectJson(path, project, report)),
+  exportMarkdown: (path: string, project: Project, report: SimReport | null): Promise<null> =>
+    unwrap(commands.exportMarkdown(path, project, report)),
+  exportSvg: (path: string, project: Project, report: SimReport | null): Promise<null> =>
+    unwrap(commands.exportSvg(path, project, report)),
+  /** Reads a project file as a new, unsaved project with a fresh id. */
+  importProjectFile: (path: string): Promise<Project> => unwrap(commands.importProjectFile(path)),
+  videoAvailable: (): Promise<boolean> => commands.videoAvailable(),
+  videoStart: (path: string, width: number, height: number, fps: number): Promise<null> =>
+    unwrap(commands.videoStart(path, width, height, fps)),
+  /** Sends one raw RGBA frame. Not in the generated bindings: a raw body has no typed signature. */
+  videoFrame: async (rgba: Uint8Array): Promise<void> => {
+    try {
+      await invoke("video_frame", rgba);
+    } catch (err) {
+      throw isAppError(err) ? new CommandError(err) : err;
+    }
+  },
+  videoFinish: (): Promise<number> => unwrap(commands.videoFinish()),
+  videoCancel: (): Promise<null> => unwrap(commands.videoCancel()),
 };

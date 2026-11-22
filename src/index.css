@@ -1455,3 +1455,23 @@ details ul {
     position: static;
   }
 }
+
+/* ---------- Export ---------- */
+
+.export-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.export-bar p {
+  margin: 0;
+}
