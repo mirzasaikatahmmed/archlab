@@ -47,4 +47,26 @@ describe("ProjectSidebar", () => {
     await userEvent.click(screen.getByRole("button", { name: "Delete Alpha" }));
     expect(h.onDelete).toHaveBeenCalledWith("1");
   });
+
+  it("offers the scenario library only when it is wired up", async () => {
+    const { rerender } = render(
+      <ProjectSidebar projects={[]} currentId={null} busy={false} {...handlers()} />,
+    );
+    expect(screen.queryByRole("button", { name: "Scenarios" })).not.toBeInTheDocument();
+    const onOpenScenarios = vi.fn();
+    rerender(
+      <ProjectSidebar
+        projects={[]}
+        currentId={null}
+        busy={false}
+        {...handlers()}
+        onOpenScenarios={onOpenScenarios}
+        scenariosActive
+      />,
+    );
+    const button = screen.getByRole("button", { name: "Scenarios" });
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(button);
+    expect(onOpenScenarios).toHaveBeenCalled();
+  });
 });

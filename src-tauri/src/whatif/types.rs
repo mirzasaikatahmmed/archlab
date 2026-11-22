@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::domain::whatif::{ServerField, Slo};
+use crate::domain::whatif::{Change, ServerField, Slo};
 use crate::sim::report::{Bottleneck, Severity, Summary};
 
 /// Which parameter a sweep varies.
@@ -44,6 +44,8 @@ pub enum WhatIfRequest {
     },
     /// Highest traffic that still meets the targets.
     Capacity,
+    /// Try likely fixes for the slowest part and rank them.
+    Suggest,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
@@ -150,12 +152,36 @@ pub struct CapacityReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Suggestion {
+    pub title: String,
+    /// The changes, in words.
+    pub changes: Vec<String>,
+    /// The same changes in a form that can be saved as a variant.
+    pub change_defs: Vec<Change>,
+    pub outcome: Outcome,
+    pub vs_baseline: Deltas,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestReport {
+    pub slo: Slo,
+    pub baseline: Outcome,
+    /// The part the suggestions aim at: the bottleneck, or the busiest node.
+    pub target: Option<String>,
+    /// Best first; only changes that improve on the baseline are listed.
+    pub suggestions: Vec<Suggestion>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(
     tag = "kind",
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
 pub enum WhatIfResult {
+    Suggest { report: SuggestReport },
     Compare { report: CompareReport },
     Sweep { report: SweepReport },
     Capacity { report: CapacityReport },

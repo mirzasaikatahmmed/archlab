@@ -399,3 +399,123 @@ fn runs_that_cannot_finish_become_failed_outcomes() {
     assert!(!outcome.meets_slo);
     assert!(outcome.error.is_some_and(|e| e.contains("events")));
 }
+
+#[test]
+fn suggestions_rank_fixes_for_an_overloaded_server() {
+    let p = single_server(150.0);
+    let result = run(
+        &p,
+        &options(),
+        &WhatIfRequest::Suggest,
+        &AtomicBool::new(false),
+        &quiet(),
+    )
+    .expect("run")
+    .expect("finished");
+    let WhatIfResult::Suggest { report } = result else {
+        panic!("not suggestions");
+    };
+    assert!(!report.baseline.meets_slo);
+    assert_eq!(report.target.as_deref(), Some("app"));
+    assert!(!report.suggestions.is_empty());
+    let best = &report.suggestions[0];
+    assert!(best.outcome.meets_slo, "{best:?}");
+    assert!(best.vs_baseline.p95_pct.is_some_and(|d| d < -50.0));
+    // Sorted best first: once one misses the targets, none after it meets them.
+    let met: Vec<bool> = report
+        .suggestions
+        .iter()
+        .map(|s| s.outcome.meets_slo)
+        .collect();
+    assert!(met.windows(2).all(|w| w[0] || !w[1]), "{met:?}");
+    assert!(
+        report
+            .suggestions
+            .iter()
+            .any(|s| matches!(s.change_defs[0], Change::Replicas { .. }))
+    );
+    assert!(
+        report
+            .suggestions
+            .iter()
+            .all(|s| s.changes.len() == s.change_defs.len())
+    );
+}
+
+#[test]
+fn suggested_changes_can_be_saved_as_a_variant() {
+    let p = single_server(150.0);
+    let WhatIfResult::Suggest { report } = run(
+        &p,
+        &options(),
+        &WhatIfRequest::Suggest,
+        &AtomicBool::new(false),
+        &quiet(),
+    )
+    .expect("run")
+    .expect("finished") else {
+        panic!("not suggestions");
+    };
+    let mut with_variant = p.clone();
+    with_variant.whatif.variants = vec![variant(
+        "s",
+        "Suggestion",
+        report.suggestions[0].change_defs.clone(),
+    )];
+    assert!(with_variant.validate().is_ok());
+}
+
+#[test]
+fn a_healthy_design_gets_few_or_no_suggestions() {
+    let p = single_server(20.0);
+    let WhatIfResult::Suggest { report } = run(
+        &p,
+        &options(),
+        &WhatIfRequest::Suggest,
+        &AtomicBool::new(false),
+        &quiet(),
+    )
+    .expect("run")
+    .expect("finished") else {
+        panic!("not suggestions");
+    };
+    assert!(report.baseline.meets_slo);
+    assert!(
+        report
+            .suggestions
+            .iter()
+            .all(|s| s.vs_baseline.p95_pct.is_some_and(|d| d < 0.0)
+                || s.vs_baseline.error_rate_points < 0.0)
+    );
+}
+
+#[test]
+fn suggestions_report_progress_and_can_be_cancelled() {
+    let p = single_server(150.0);
+    let last = std::sync::atomic::AtomicU32::new(0);
+    let progress = |done: u32, total: u32| {
+        assert!(done <= total);
+        last.fetch_max(done, Ordering::Relaxed);
+    };
+    run(
+        &p,
+        &options(),
+        &WhatIfRequest::Suggest,
+        &AtomicBool::new(false),
+        &progress,
+    )
+    .expect("run")
+    .expect("finished");
+    assert!(last.load(Ordering::Relaxed) >= 3);
+    assert!(
+        run(
+            &p,
+            &options(),
+            &WhatIfRequest::Suggest,
+            &AtomicBool::new(true),
+            &quiet()
+        )
+        .expect("run")
+        .is_none()
+    );
+}

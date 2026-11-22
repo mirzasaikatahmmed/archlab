@@ -94,6 +94,40 @@ impl Fault {
     pub fn end_s(&self) -> f64 {
         self.start_s + self.duration_s
     }
+
+    /// A short description using the labels of the node or connection it targets.
+    pub fn describe(&self, topology: &Topology) -> String {
+        let label = |id: &str| {
+            topology
+                .nodes
+                .iter()
+                .find(|n| n.id == id)
+                .map_or_else(|| id.to_owned(), |n| n.label.clone())
+        };
+        let place = if self.kind.targets_edge() {
+            topology
+                .edges
+                .iter()
+                .find(|e| e.id == self.target)
+                .map_or_else(
+                    || self.target.clone(),
+                    |e| format!("{} \u{2192} {}", label(&e.source), label(&e.target)),
+                )
+        } else {
+            label(&self.target)
+        };
+        match &self.kind {
+            FaultKind::Crash => format!("Crash of {place}"),
+            FaultKind::Slowdown { factor } => format!("{factor}\u{d7} slowdown of {place}"),
+            FaultKind::LostWorkers { fraction } => {
+                format!("{:.0}% of workers lost on {place}", fraction * 100.0)
+            }
+            FaultKind::EdgeLatency { extra_ms } => format!("+{extra_ms} ms latency on {place}"),
+            FaultKind::EdgeLoss { loss } => {
+                format!("{:.0}% packet loss on {place}", loss * 100.0)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]

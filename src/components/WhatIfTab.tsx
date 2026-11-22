@@ -4,6 +4,7 @@ import { sloSchema } from "../schemas/whatif";
 import { CapacityPanel } from "./CapacityPanel";
 import { ComparePanel } from "./ComparePanel";
 import { FormField } from "./FormField";
+import { SuggestPanel } from "./SuggestPanel";
 import { SweepPanel } from "./SweepPanel";
 
 interface Props {
@@ -12,12 +13,13 @@ interface Props {
   onChange: (whatif: WhatIf) => void;
 }
 
-type Mode = "compare" | "sweep" | "capacity";
+type Mode = "compare" | "sweep" | "capacity" | "suggest";
 
 const MODES: { id: Mode; label: string }[] = [
   { id: "compare", label: "Compare variants" },
   { id: "sweep", label: "Sweep a parameter" },
   { id: "capacity", label: "Capacity" },
+  { id: "suggest", label: "Suggestions" },
 ];
 
 const num = (e: { target: { valueAsNumber: number } }) => e.target.valueAsNumber;
@@ -125,6 +127,9 @@ export function WhatIfTab({ project, templates, onChange }: Props) {
       )}
       {mode === "sweep" && <SweepPanel project={project} options={options} templates={templates} />}
       {mode === "capacity" && <CapacityPanel project={project} options={options} />}
+      {mode === "suggest" && (
+        <SuggestPanel project={project} options={options} onChange={onChange} />
+      )}
     </div>
   );
 }

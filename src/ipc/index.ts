@@ -13,6 +13,8 @@ import {
   type Project,
   type ProjectSummary,
   type RealEvent,
+  type ScenarioSummary,
+  type ScenarioView,
   type ServerProfile,
   type SimOptions,
   type SimReport,
@@ -125,4 +127,9 @@ export const api = {
     await unwrap(commands.startWhatIf(project, options, request, channel));
   },
   cancelWhatIf: (): Promise<null> => unwrap(commands.cancelWhatIf()),
+  listScenarios: (): Promise<ScenarioSummary[]> => commands.listScenarios(),
+  getScenario: (id: string): Promise<ScenarioView> => unwrap(commands.getScenario(id)),
+  /** The design after `step` (counting from 0) of a scenario, as a new unsaved project. */
+  scenarioStepProject: (id: string, step: number): Promise<Project> =>
+    unwrap(commands.scenarioStepProject(id, step)),
 };

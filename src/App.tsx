@@ -3,12 +3,16 @@ import { CalibrationSection } from "./components/CalibrationSection";
 import { ChaosEditor } from "./components/ChaosEditor";
 import { Icon, type IconName } from "./components/Icon";
 import { ProjectSidebar } from "./components/ProjectSidebar";
+import { ScenarioLibrary } from "./components/ScenarioLibrary";
+import { ScenarioPlayer } from "./components/ScenarioPlayer";
 import { SimulateTab } from "./components/SimulateTab";
 import { WhatIfTab } from "./components/WhatIfTab";
 import { ServerProfileForm } from "./components/ServerProfileForm";
 import { TrafficProfileEditor } from "./components/TrafficProfileEditor";
 import { TopologyCanvas } from "./components/topology/TopologyCanvas";
 import { useProjectStore } from "./store/projectStore";
+
+type View = { kind: "project" } | { kind: "library" } | { kind: "play"; id: string };
 
 type Tab = "server" | "traffic" | "topology" | "chaos" | "simulate" | "whatif";
 
@@ -24,6 +28,7 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
 export default function App() {
   const store = useProjectStore();
   const [tab, setTab] = useState<Tab>("server");
+  const [view, setView] = useState<View>({ kind: "project" });
   /** Bumped when calibration rewrites the profile, so the uncontrolled form reloads it. */
   const [formVersion, setFormVersion] = useState(0);
   const { current } = store;
@@ -38,9 +43,19 @@ export default function App() {
         projects={store.projects}
         currentId={current?.id ?? null}
         busy={store.busy}
-        onCreate={(name) => void store.createProject(name)}
-        onOpen={(id) => void store.openProject(id)}
+        onCreate={(name) => {
+          setView({ kind: "project" });
+          void store.createProject(name);
+        }}
+        onOpen={(id) => {
+          setView({ kind: "project" });
+          void store.openProject(id);
+        }}
         onDelete={(id) => void store.deleteProject(id)}
+        onOpenScenarios={() => {
+          setView({ kind: "library" });
+        }}
+        scenariosActive={view.kind !== "project"}
       />
       <main className="main">
         {store.error && (
@@ -58,7 +73,25 @@ export default function App() {
             )}
           </div>
         )}
-        {current ? (
+        {view.kind === "library" ? (
+          <ScenarioLibrary
+            onPlay={(id) => {
+              setView({ kind: "play", id });
+            }}
+          />
+        ) : view.kind === "play" ? (
+          <ScenarioPlayer
+            scenarioId={view.id}
+            onExit={() => {
+              setView({ kind: "library" });
+            }}
+            onOpenAsProject={(project) => {
+              void store.importProject(project).then(() => {
+                setView({ kind: "project" });
+              });
+            }}
+          />
+        ) : current ? (
           <div key={current.id} className="workspace">
             <header className="topbar">
               <input

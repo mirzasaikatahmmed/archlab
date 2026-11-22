@@ -1,20 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { LiveEvent, LiveNodeTick, LiveTick, Project, SimReport } from "../bindings";
-import { CommandError, api, describeError } from "../ipc";
+import { useState } from "react";
+import type { LiveNodeTick, Project } from "../bindings";
 import { last } from "../lib/numbers";
-import { FAULT_LABELS } from "../schemas/chaos";
-import { LineChart, type Band } from "./LineChart";
-import { Stage } from "./Stage";
-import { Icon } from "./Icon";
 import { levelFor } from "../lib/severity";
+import { useLiveRun } from "../lib/useLiveRun";
+import { FAULT_LABELS } from "../schemas/chaos";
+import { Icon } from "./Icon";
+import { LineChart, type Band } from "./LineChart";
 import { ReportView, UtilBar, pct } from "./ReportView";
+import { Stage } from "./Stage";
 
 interface Props {
   project: Project;
 }
 
 type View = "stage" | "charts";
-type Status = "idle" | "running" | "paused" | "finished" | "stopped" | "failed";
 
 const SPEEDS: { label: string; value: number | null }[] = [
   { label: "1×", value: 1 },
@@ -23,21 +22,7 @@ const SPEEDS: { label: string; value: number | null }[] = [
   { label: "Max", value: null },
 ];
 
-/** How often buffered ticks are drawn; the engine can emit far more at max speed. */
-const FLUSH_MS = 250;
-
 const num = (v: number | null) => v ?? 0;
-
-/** Ending a run that already finished is not an error. */
-async function stopQuietly(): Promise<void> {
-  try {
-    await api.controlLiveRun({ kind: "stop" });
-  } catch (err) {
-    if (!(err instanceof CommandError && err.error.kind === "simulation")) {
-      throw err;
-    }
-  }
-}
 
 function NodeBar({ node, label }: { node: LiveNodeTick; label: string }) {
   return (
@@ -56,96 +41,9 @@ export function LivePanel({ project }: Props) {
   const [seed, setSeed] = useState(1);
   const [durationS, setDurationS] = useState(60);
   const [speed, setSpeed] = useState<number | null>(5);
-  const [status, setStatus] = useState<Status>("idle");
   const [view, setView] = useState<View>("stage");
-  const [ticks, setTicks] = useState<LiveTick[]>([]);
-  const [report, setReport] = useState<SimReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const buffer = useRef<LiveEvent[]>([]);
-  const active = status === "running" || status === "paused";
-  const activeRef = useRef(active);
-  useEffect(() => {
-    activeRef.current = active;
-  }, [active]);
-
-  const flush = useCallback(() => {
-    const events = buffer.current.splice(0);
-    if (events.length === 0) {
-      return;
-    }
-    const fresh: LiveTick[] = [];
-    for (const event of events) {
-      switch (event.kind) {
-        case "tick":
-          fresh.push(event.tick);
-          break;
-        case "finished":
-          setReport(event.report);
-          setStatus("finished");
-          break;
-        case "stopped":
-          setStatus("stopped");
-          break;
-        case "failed":
-          setError(event.message);
-          setStatus("failed");
-          break;
-      }
-    }
-    if (fresh.length > 0) {
-      setTicks((prev) => [...prev, ...fresh]);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!active) {
-      return;
-    }
-    const id = setInterval(flush, FLUSH_MS);
-    return () => {
-      clearInterval(id);
-      flush();
-    };
-  }, [active, flush]);
-
-  useEffect(
-    () => () => {
-      if (activeRef.current) {
-        void stopQuietly();
-      }
-    },
-    [],
-  );
-
-  const showError = (err: unknown) => {
-    setError(
-      err instanceof CommandError ? describeError(err.error) : "The live run failed unexpectedly",
-    );
-  };
-
-  const start = async () => {
-    setError(null);
-    setReport(null);
-    setTicks([]);
-    buffer.current = [];
-    try {
-      await api.startLiveRun(project, { seed, durationS, warmupS: 5 }, speed, (event) => {
-        buffer.current.push(event);
-      });
-      setStatus("running");
-    } catch (err) {
-      showError(err);
-      setStatus("failed");
-    }
-  };
-
-  const control = async (command: Parameters<typeof api.controlLiveRun>[0]) => {
-    try {
-      await api.controlLiveRun(command);
-    } catch (err) {
-      showError(err);
-    }
-  };
+  const run = useLiveRun(project);
+  const { status, active, ticks, report, error } = run;
 
   const latest = last(ticks);
   const names = new Map(project.topology.nodes.map((n) => [n.id, n.label]));
@@ -197,7 +95,7 @@ export function LivePanel({ project }: Props) {
               const next = e.target.value === "max" ? null : Number(e.target.value);
               setSpeed(next);
               if (active) {
-                void control({ kind: "setSpeed", speed: next });
+                void run.setSpeed(next);
               }
             }}
           >
@@ -213,7 +111,7 @@ export function LivePanel({ project }: Props) {
             type="button"
             className="primary"
             onClick={() => {
-              void start();
+              void run.start({ seed, durationS, warmupS: 5 }, speed);
             }}
           >
             <Icon name="play" />
@@ -225,9 +123,7 @@ export function LivePanel({ project }: Props) {
             <button
               type="button"
               onClick={() => {
-                const next = status === "paused" ? "resume" : "pause";
-                void control({ kind: next });
-                setStatus(status === "paused" ? "running" : "paused");
+                void (status === "paused" ? run.resume() : run.pause());
               }}
             >
               <Icon name={status === "paused" ? "play" : "pause"} />
@@ -236,7 +132,7 @@ export function LivePanel({ project }: Props) {
             <button
               type="button"
               onClick={() => {
-                void control({ kind: "stop" });
+                void run.stop();
               }}
             >
               <Icon name="stop" />

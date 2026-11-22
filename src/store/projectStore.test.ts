@@ -114,6 +114,20 @@ describe("projectStore", () => {
     expect(kinds).toEqual(["replicas", "trafficScale"]);
   });
 
+  it("saves and opens a project built elsewhere, such as a scenario step", async () => {
+    const built: Project = { ...project, id: "scenario-step", name: "Scenario (step 2)" };
+    api.saveProject.mockResolvedValue({ ...built, updatedAt: 5 });
+    api.listProjects.mockResolvedValue([
+      { id: "scenario-step", name: "Scenario (step 2)", nodeCount: 1, updatedAt: 5 },
+    ]);
+    await useProjectStore.getState().importProject(built);
+    const state = useProjectStore.getState();
+    expect(api.saveProject).toHaveBeenCalledWith(built);
+    expect(state.current?.id).toBe("scenario-step");
+    expect(state.dirty).toBe(false);
+    expect(state.projects).toHaveLength(1);
+  });
+
   it("exposes Rust validation issues from a failed save", async () => {
     const error: AppError = {
       kind: "validation",

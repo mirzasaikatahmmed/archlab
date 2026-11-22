@@ -25,6 +25,8 @@ interface ProjectState {
   openProject: (id: string) => Promise<void>;
   saveCurrent: () => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
+  /** Saves a project that was built elsewhere, such as a scenario step, and opens it. */
+  importProject: (project: Project) => Promise<void>;
   closeProject: () => void;
   rename: (name: string) => void;
   setServerProfile: (profile: ServerProfile) => void;
@@ -79,6 +81,12 @@ export const useProjectStore = create<ProjectState>()((set, get) => {
       run(async () => {
         const project = await api.createProject(name);
         set({ current: project, dirty: false, projects: await api.listProjects() });
+      }),
+
+    importProject: (project) =>
+      run(async () => {
+        const saved = await api.saveProject(project);
+        set({ current: saved, dirty: false, projects: await api.listProjects() });
       }),
 
     openProject: (id) =>

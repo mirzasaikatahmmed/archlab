@@ -10,9 +10,21 @@ interface Props {
   onCreate: (name: string) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
+  /** Opens the scenario library; the button is hidden when absent. */
+  onOpenScenarios?: () => void;
+  scenariosActive?: boolean;
 }
 
-export function ProjectSidebar({ projects, currentId, busy, onCreate, onOpen, onDelete }: Props) {
+export function ProjectSidebar({
+  projects,
+  currentId,
+  busy,
+  onCreate,
+  onOpen,
+  onDelete,
+  onOpenScenarios,
+  scenariosActive = false,
+}: Props) {
   const [name, setName] = useState("");
   const trimmed = name.trim();
 
@@ -22,6 +34,17 @@ export function ProjectSidebar({ projects, currentId, busy, onCreate, onOpen, on
         <Icon name="logo" size={20} />
         ArchLab
       </div>
+      {onOpenScenarios && (
+        <button
+          type="button"
+          className="nav-button"
+          aria-pressed={scenariosActive}
+          onClick={onOpenScenarios}
+        >
+          <Icon name="book" />
+          Scenarios
+        </button>
+      )}
       <form
         className="new-project"
         onSubmit={(e) => {

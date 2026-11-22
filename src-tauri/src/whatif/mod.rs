@@ -2,6 +2,7 @@
 
 mod capacity;
 mod parallel;
+mod suggest;
 mod types;
 
 use std::sync::atomic::AtomicBool;
@@ -93,7 +94,7 @@ fn ratio_pct(base: f64, value: f64) -> Option<f64> {
     (base.abs() > 1e-9).then(|| (value - base) / base * 100.0)
 }
 
-fn deltas(baseline: &Outcome, variant: &Outcome) -> Deltas {
+pub(crate) fn deltas(baseline: &Outcome, variant: &Outcome) -> Deltas {
     let (b, v) = (&baseline.summary, &variant.summary);
     Deltas {
         throughput_pct: ratio_pct(b.throughput_rps, v.throughput_rps),
@@ -223,6 +224,8 @@ pub fn run(
             .map(|r| r.map(|report| WhatIfResult::Sweep { report })),
         WhatIfRequest::Capacity => capacity::run(project, options, &slo, cancel, progress)
             .map(|r| r.map(|report| WhatIfResult::Capacity { report })),
+        WhatIfRequest::Suggest => suggest::run(project, options, &slo, cancel, progress)
+            .map(|r| r.map(|report| WhatIfResult::Suggest { report })),
     }
 }
 

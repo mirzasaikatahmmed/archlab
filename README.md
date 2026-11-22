@@ -34,7 +34,7 @@ external dependencies for end users. **All simulation results are estimates.**
 | `pnpm bindings`                     | Regenerate `src/bindings.ts` from Rust     |
 | `pnpm check`                        | Everything above (same as CI, minus build) |
 
-## Features (Phases 2-7)
+## Features (Phases 2-8)
 
 - **Projects**: create, open, save, delete (stored locally in SQLite, in the OS app-data folder).
 - **Server profile**: OS, CPU cores/GHz, RAM, disk type + IOPS, network bandwidth/latency,
@@ -61,10 +61,16 @@ external dependencies for end users. **All simulation results are estimates.**
   wait before retry). Reports show error rate and p95 before, during and after each fault and how
   long recovery took; live runs shade the fault windows and show faults on the Stage. See
   [ADR-007](docs/adr/ADR-007-chaos-and-client-policy.md).
+- **Scenarios** (sidebar): five guided stories (everything on one machine, a cache in front of the
+  database, a traffic spike, a retry storm, latency is not capacity). Each step changes the design,
+  explains what happens and plays it on the stage; open any step as a normal project. Every claim in
+  the narration is checked by a test. Add one by dropping JSON in `src-tauri/scenarios/` (see
+  [ADR-010](docs/adr/ADR-010-guided-scenarios.md)).
 - **What-if** (What-if tab): ask "what if" against the current design with seeded runs. Compare
   variants (traffic, server settings, node settings, replicas, no faults) with the baseline,
-  sweep one parameter and chart latency, errors and throughput, or find the highest traffic that
-  still meets your p95 and error targets. Targets and variants are saved with the project. See
+  sweep one parameter and chart latency, errors and throughput, find the highest traffic that
+  still meets your p95 and error targets, or ask for suggestions: likely fixes for the slowest part,
+  ranked, with a button to keep any of them as a variant. Targets and variants are saved with the project. See
   [ADR-009](docs/adr/ADR-009-what-if-analysis.md). Nodes also have a Replicas setting on the canvas.
 - **Calibration** (Server profile tab): benchmarks this computer (CPU speed score, synced disk
   writes, loopback latency) in a few seconds and fills the profile with measured values on request.
@@ -109,6 +115,7 @@ src-tauri/src/
   chaos/ export/     Later phases
   ipc.rs / error.rs  Command registry + binding export, typed AppError
 src-tauri/templates/ Embedded config template JSON
+src-tauri/scenarios/ Embedded guided scenario JSON
 docs/adr/            Architecture decision records
 ```
 
@@ -122,11 +129,11 @@ Rule: no business logic in the UI; commands only delegate to the Rust modules.
 4. Load generator + live metrics (done)
 5. Chaos (done)
 6. Real mode + calibration (done)
-7. What-if (current)
-8. Scenarios
+7. What-if (done)
+8. Scenarios (current)
 9. Export (JSON, Markdown, SVG, WebM; PDF later)
 10. Packaging, signing, auto-update
 
 ## Documentation
 
-- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode, ADR-009 what-if
+- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode, ADR-009 what-if, ADR-010 scenarios

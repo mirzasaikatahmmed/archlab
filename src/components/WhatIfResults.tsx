@@ -2,6 +2,8 @@ import type {
   CapacityReport,
   CompareReport,
   Outcome,
+  SuggestReport,
+  Suggestion,
   SweepReport,
   VariantResult,
 } from "../bindings";
@@ -260,6 +262,85 @@ export function CapacityResults({ report }: { report: CapacityReport }) {
           </tbody>
         </table>
       </div>
+    </>
+  );
+}
+
+interface SuggestProps {
+  report: SuggestReport;
+  /** Saves a suggestion as a variant of the project; absent hides the button. */
+  onSave?: (suggestion: Suggestion) => void;
+  saveDisabled?: boolean;
+}
+
+export function SuggestResults({ report, onSave, saveDisabled }: SuggestProps) {
+  const meets = report.baseline.meetsSlo;
+  return (
+    <>
+      <p role="status" className="callout" data-severity={meets ? "healthy" : "warning"}>
+        <strong>
+          {meets ? "The design already meets its targets" : "The design misses its targets"}
+        </strong>
+        <span className="muted">
+          {report.target ? `Aimed at: ${report.target}. ` : ""}
+          {report.suggestions.length === 0
+            ? "No simple change improved on the current design."
+            : `${String(report.suggestions.length)} changes helped, best first.`}
+        </span>
+      </p>
+      {report.suggestions.length > 0 && (
+        <div className="table-wrap">
+          <table className="results">
+            <caption>Suggested changes</caption>
+            <thead>
+              <tr>
+                <th>Change</th>
+                <th>Throughput (req/s)</th>
+                <th>Errors</th>
+                <th>p95 latency</th>
+                <th>Targets</th>
+                {onSave && <th aria-label="Actions" />}
+              </tr>
+            </thead>
+            <tbody>
+              {report.suggestions.map((s) => (
+                <tr key={s.title}>
+                  <th scope="row">{s.title}</th>
+                  <td>
+                    {n(s.outcome.summary.throughputRps).toFixed(1)}
+                    <Delta value={s.vsBaseline.throughputPct} lowerIsBetter={false} unit="%" />
+                  </td>
+                  <td>
+                    {pct(s.outcome.summary.errorRate)}
+                    <Delta value={s.vsBaseline.errorRatePoints} lowerIsBetter unit=" pts" />
+                  </td>
+                  <td>
+                    {ms(s.outcome.summary.latency.p95Ms)}
+                    <Delta value={s.vsBaseline.p95Pct} lowerIsBetter unit="%" />
+                  </td>
+                  <td>
+                    <Targets outcome={s.outcome} />
+                  </td>
+                  {onSave && (
+                    <td>
+                      <button
+                        type="button"
+                        disabled={saveDisabled}
+                        aria-label={`Save ${s.title} as a variant`}
+                        onClick={() => {
+                          onSave(s);
+                        }}
+                      >
+                        Save as variant
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   );
 }

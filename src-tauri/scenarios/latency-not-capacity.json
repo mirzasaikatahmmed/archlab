@@ -1,0 +1,330 @@
+{
+  "schemaVersion": 1,
+  "id": "latency-not-capacity",
+  "title": "Latency is not capacity",
+  "summary": "A slow link makes users wait even though nothing is overloaded. More servers do not help; making the slow path rare does.",
+  "level": "intermediate",
+  "minutes": 4,
+  "project": {
+    "name": "Latency is not capacity",
+    "serverProfile": {
+      "os": "linux",
+      "cpuCores": 4,
+      "cpuGhz": 3.0,
+      "ramGb": 16.0,
+      "disk": {
+        "kind": "ssd",
+        "iops": 20000
+      },
+      "network": {
+        "bandwidthMbps": 1000.0,
+        "latencyMs": 0.5
+      },
+      "virtualization": "vm",
+      "fdLimit": 65536
+    },
+    "trafficProfile": {
+      "concurrentUsers": 1000,
+      "requestsPerSecond": 100.0,
+      "readRatio": 0.99,
+      "spike": {
+        "kind": "none"
+      }
+    },
+    "topology": {
+      "nodes": [
+        {
+          "id": "client",
+          "kind": "client",
+          "label": "Users",
+          "position": {
+            "x": 0,
+            "y": 120
+          },
+          "template": null,
+          "settings": {},
+          "replicas": 1
+        },
+        {
+          "id": "app",
+          "kind": "appServer",
+          "label": "App server",
+          "position": {
+            "x": 260,
+            "y": 120
+          },
+          "template": null,
+          "settings": {},
+          "replicas": 1
+        },
+        {
+          "id": "db",
+          "kind": "database",
+          "label": "Database",
+          "position": {
+            "x": 540,
+            "y": 120
+          },
+          "template": null,
+          "settings": {},
+          "replicas": 1
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-client-app",
+          "source": "client",
+          "target": "app"
+        },
+        {
+          "id": "e-app-db",
+          "source": "app",
+          "target": "db"
+        }
+      ]
+    },
+    "chaos": {
+      "faults": [],
+      "policy": {
+        "timeoutMs": 10000.0,
+        "maxRetries": 0,
+        "backoffMs": 100.0
+      }
+    },
+    "slo": {
+      "p95Ms": 100.0,
+      "maxErrorRate": 0.01
+    }
+  },
+  "steps": [
+    {
+      "title": "A fast, quiet system",
+      "narration": [
+        "The app and its database sit in the same room, so a request takes a few milliseconds. The goal is for 95 percent of requests to finish within 100 milliseconds.",
+        "Both servers are mostly idle."
+      ],
+      "highlight": ["app", "db"],
+      "changes": [],
+      "play": {
+        "mode": "live",
+        "durationS": 30.0,
+        "speed": 5
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": true
+        },
+        {
+          "kind": "bottleneck",
+          "node": null
+        }
+      ]
+    },
+    {
+      "title": "The database moves far away",
+      "narration": [
+        "The database is moved to another region and every trip to it now takes an extra 150 milliseconds.",
+        "Nothing is overloaded. Both servers are as idle as before, yet users wait much longer and the target is missed. Slow and saturated are different problems."
+      ],
+      "highlight": ["db"],
+      "changes": [
+        {
+          "kind": "addFault",
+          "fault": {
+            "id": "far",
+            "target": "e-app-db",
+            "kind": {
+              "kind": "edgeLatency",
+              "extraMs": 150.0
+            },
+            "startS": 0.0,
+            "durationS": 3600.0
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 30.0,
+        "speed": 5
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": false
+        },
+        {
+          "kind": "bottleneck",
+          "node": null
+        },
+        {
+          "kind": "p95AboveMs",
+          "value": 150
+        }
+      ]
+    },
+    {
+      "title": "More servers do not help",
+      "narration": [
+        "Add more app servers, as you would for a capacity problem. Each request still has to wait for its own trip to the database.",
+        "Capacity adds throughput, not speed. The latency target is still missed."
+      ],
+      "highlight": ["app"],
+      "changes": [
+        {
+          "kind": "apply",
+          "change": {
+            "kind": "replicas",
+            "node": "app",
+            "count": 3
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 30.0,
+        "speed": 5
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": false
+        },
+        {
+          "kind": "bottleneck",
+          "node": null
+        }
+      ]
+    },
+    {
+      "title": "A cache that sometimes misses",
+      "narration": [
+        "Put a cache next to the app. Reads that hit it skip the slow trip entirely, and 80 percent of them do.",
+        "But the 20 percent that miss are still slow, and that is far more than the 5 percent the 95th percentile ignores. The target is still missed."
+      ],
+      "highlight": ["cache"],
+      "changes": [],
+      "play": {
+        "mode": "live",
+        "durationS": 30.0,
+        "speed": 5
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": false
+        },
+        {
+          "kind": "p95AboveMs",
+          "value": 100
+        }
+      ],
+      "topology": {
+        "nodes": [
+          {
+            "id": "client",
+            "kind": "client",
+            "label": "Users",
+            "position": {
+              "x": 0,
+              "y": 150
+            },
+            "template": null,
+            "settings": {},
+            "replicas": 1
+          },
+          {
+            "id": "app",
+            "kind": "appServer",
+            "label": "App server",
+            "position": {
+              "x": 260,
+              "y": 150
+            },
+            "template": null,
+            "settings": {},
+            "replicas": 1
+          },
+          {
+            "id": "cache",
+            "kind": "cache",
+            "label": "Cache",
+            "position": {
+              "x": 560,
+              "y": 0
+            },
+            "template": {
+              "id": "redis",
+              "version": 2
+            },
+            "settings": {},
+            "replicas": 1
+          },
+          {
+            "id": "db",
+            "kind": "database",
+            "label": "Database",
+            "position": {
+              "x": 560,
+              "y": 300
+            },
+            "template": null,
+            "settings": {},
+            "replicas": 1
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-client-app",
+            "source": "client",
+            "target": "app"
+          },
+          {
+            "id": "e-app-cache",
+            "source": "app",
+            "target": "cache"
+          },
+          {
+            "id": "e-app-db",
+            "source": "app",
+            "target": "db"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Make the slow path rare",
+      "narration": [
+        "Raise the hit ratio to 98 percent. Now fewer than 5 percent of requests take the slow trip, so the 95th percentile no longer sees it.",
+        "The slow link has not changed at all. Tail latency depends on how often the slow path happens, not just on how slow it is."
+      ],
+      "highlight": ["cache"],
+      "changes": [
+        {
+          "kind": "apply",
+          "change": {
+            "kind": "nodeSetting",
+            "node": "cache",
+            "key": "hit_ratio",
+            "value": 0.98
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 30.0,
+        "speed": 5
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": true
+        },
+        {
+          "kind": "p95BelowMs",
+          "value": 100
+        }
+      ]
+    }
+  ]
+}

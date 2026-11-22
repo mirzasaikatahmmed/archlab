@@ -15,7 +15,8 @@ export type IconName =
   | "topology"
   | "detect"
   | "bolt"
-  | "branch";
+  | "branch"
+  | "book";
 
 const SHAPES: Record<IconName, ReactNode> = {
   logo: (
@@ -60,6 +61,7 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M7 11l10-4M7 13l10 4" />
     </>
   ),
+  book: <path d="M4 5a2 2 0 012-2h13v15H6a2 2 0 00-2 2V5zM4 20a2 2 0 012-2h13v3H6a2 2 0 01-2-1z" />,
   branch: (
     <>
       <circle cx="6" cy="5" r="2.2" />

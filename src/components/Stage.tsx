@@ -23,6 +23,8 @@ interface Props {
   faults: Fault[];
   /** A live run is in progress (running or paused); faults are shown only then. */
   active: boolean;
+  /** Ids of nodes to point at, for guided scenarios. */
+  highlight?: string[];
 }
 
 const HEIGHT = 440;
@@ -63,7 +65,7 @@ function loadsFrom(
  * Isometric view of the topology. Dots are sampled from per-second metrics, so
  * they show the shape of the traffic, not individual requests.
  */
-export function Stage({ topology, latest, running, faults, active }: Props) {
+export function Stage({ topology, latest, running, faults, active, highlight }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const graph = useMemo(() => buildGraph(topology), [topology]);
   const nodes = useMemo(() => sceneNodes(topology), [topology]);
@@ -72,6 +74,7 @@ export function Stage({ topology, latest, running, faults, active }: Props) {
 
   const loadsRef = useRef<NodeLoad[]>([]);
   const conditionsRef = useRef<Conditions>(calm(graph));
+  const highlightRef = useRef<ReadonlySet<number>>(new Set());
   const offeredRef = useRef(0);
   const droppedRef = useRef(new Map<string, number>());
   const runningRef = useRef(running);
@@ -81,6 +84,16 @@ export function Stage({ topology, latest, running, faults, active }: Props) {
   useEffect(() => {
     runningRef.current = running;
   }, [running]);
+
+  useEffect(() => {
+    highlightRef.current = new Set(
+      (highlight ?? []).flatMap((id) => {
+        const i = graph.nodeIds.indexOf(id);
+        return i >= 0 ? [i] : [];
+      }),
+    );
+    redrawRef.current();
+  }, [highlight, graph]);
 
   useEffect(() => {
     const conditions = active
@@ -142,6 +155,7 @@ export function Stage({ topology, latest, running, faults, active }: Props) {
         time,
         motion: !reduced,
         conditions: conditionsRef.current,
+        highlight: highlightRef.current,
       });
     };
     redrawRef.current = () => {

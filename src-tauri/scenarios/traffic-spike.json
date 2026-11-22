@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "id": "traffic-spike",
+  "title": "A traffic spike",
+  "summary": "Average load looks fine, but a short burst overwhelms the server. See why capacity planning is about peaks, not averages.",
+  "level": "beginner",
+  "minutes": 3,
+  "project": {
+    "name": "A traffic spike",
+    "serverProfile": {
+      "os": "linux",
+      "cpuCores": 4,
+      "cpuGhz": 3.0,
+      "ramGb": 16.0,
+      "disk": {
+        "kind": "ssd",
+        "iops": 20000
+      },
+      "network": {
+        "bandwidthMbps": 1000.0,
+        "latencyMs": 0.5
+      },
+      "virtualization": "vm",
+      "fdLimit": 65536
+    },
+    "trafficProfile": {
+      "concurrentUsers": 1000,
+      "requestsPerSecond": 200.0,
+      "readRatio": 0.8,
+      "spike": {
+        "kind": "none"
+      }
+    },
+    "topology": {
+      "nodes": [
+        {
+          "id": "client",
+          "kind": "client",
+          "label": "Users",
+          "position": {
+            "x": 0,
+            "y": 120
+          },
+          "template": null,
+          "settings": {},
+          "replicas": 1
+        },
+        {
+          "id": "app",
+          "kind": "appServer",
+          "label": "Everything on one machine",
+          "position": {
+            "x": 280,
+            "y": 120
+          },
+          "template": null,
+          "settings": {},
+          "replicas": 1
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-client-app",
+          "source": "client",
+          "target": "app"
+        }
+      ]
+    },
+    "chaos": {
+      "faults": [],
+      "policy": {
+        "timeoutMs": 10000.0,
+        "maxRetries": 0,
+        "backoffMs": 100.0
+      }
+    },
+    "slo": {
+      "p95Ms": 200.0,
+      "maxErrorRate": 0.01
+    }
+  },
+  "steps": [
+    {
+      "title": "Steady traffic",
+      "narration": [
+        "200 requests per second is comfortable for this server: about half of what it can do.",
+        "Average load is what most dashboards show first, and here it says everything is fine."
+      ],
+      "highlight": ["app"],
+      "changes": [],
+      "play": {
+        "mode": "live",
+        "durationS": 60.0,
+        "speed": 8
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": true
+        },
+        {
+          "kind": "bottleneck",
+          "node": null
+        }
+      ]
+    },
+    {
+      "title": "A spike arrives",
+      "narration": [
+        "Every minute, traffic triples for fifteen seconds, perhaps because of a newsletter or a scheduled job. The average barely moves, but the peak is 600 requests per second.",
+        "During the spike the server falls behind. The queue fills, latency soars and some requests are rejected, and it takes a while to drain afterwards."
+      ],
+      "highlight": ["app"],
+      "changes": [
+        {
+          "kind": "setTraffic",
+          "traffic": {
+            "concurrentUsers": 1000,
+            "requestsPerSecond": 200.0,
+            "readRatio": 0.8,
+            "spike": {
+              "kind": "periodic",
+              "periodS": 60.0,
+              "multiplier": 3.0,
+              "durationS": 15.0
+            }
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 60.0,
+        "speed": 8
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": false
+        },
+        {
+          "kind": "bottleneck",
+          "node": "app"
+        }
+      ]
+    },
+    {
+      "title": "Headroom absorbs it",
+      "narration": [
+        "Run two copies of the server. The spike now lands on twice the capacity and passes almost unnoticed.",
+        "The price is a lot of idle capacity most of the time, which is why teams argue about how much headroom is enough."
+      ],
+      "highlight": ["app"],
+      "changes": [
+        {
+          "kind": "apply",
+          "change": {
+            "kind": "replicas",
+            "node": "app",
+            "count": 2
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 60.0,
+        "speed": 8
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": true
+        },
+        {
+          "kind": "utilizationBelow",
+          "node": "app",
+          "value": 0.5
+        }
+      ]
+    }
+  ]
+}

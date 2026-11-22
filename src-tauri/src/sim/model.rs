@@ -136,7 +136,7 @@ impl Model {
             .chaos
             .faults
             .iter()
-            .map(|f| compile_fault(f, &nodes, &index, &edges, topology))
+            .map(|f| compile_fault(f, &index, &edges, topology))
             .collect::<Result<Vec<_>, _>>()?;
         let policy = &project.chaos.policy;
 
@@ -195,36 +195,25 @@ pub fn ms_to_us(ms: f64) -> u64 {
 
 fn compile_fault(
     fault: &Fault,
-    nodes: &[NodeModel],
     index: &BTreeMap<&str, usize>,
     edges: &[(usize, usize)],
     topology: &crate::domain::topology::Topology,
 ) -> Result<CompiledFault, SimError> {
     let missing = || SimError::Model(format!("fault {} refers to a missing target", fault.id));
-    let (target, place) = if fault.kind.targets_edge() {
+    let target = if fault.kind.targets_edge() {
         let number = topology
             .edges
             .iter()
             .position(|e| e.id == fault.target)
             .ok_or_else(missing)?;
-        let (from, to) = edges.get(number).copied().ok_or_else(missing)?;
-        (
-            FaultTarget::Edge(number),
-            format!("{} \u{2192} {}", nodes[from].label, nodes[to].label),
-        )
-    } else {
-        let node = *index.get(fault.target.as_str()).ok_or_else(missing)?;
-        (FaultTarget::Node(node), nodes[node].label.clone())
-    };
-    let label = match &fault.kind {
-        FaultKind::Crash => format!("Crash of {place}"),
-        FaultKind::Slowdown { factor } => format!("{factor}\u{d7} slowdown of {place}"),
-        FaultKind::LostWorkers { fraction } => {
-            format!("{:.0}% of workers lost on {place}", fraction * 100.0)
+        if number >= edges.len() {
+            return Err(missing());
         }
-        FaultKind::EdgeLatency { extra_ms } => format!("+{extra_ms} ms latency on {place}"),
-        FaultKind::EdgeLoss { loss } => format!("{:.0}% packet loss on {place}", loss * 100.0),
+        FaultTarget::Edge(number)
+    } else {
+        FaultTarget::Node(*index.get(fault.target.as_str()).ok_or_else(missing)?)
     };
+    let label = fault.describe(topology);
     Ok(CompiledFault {
         id: fault.id.clone(),
         kind: fault.kind.clone(),

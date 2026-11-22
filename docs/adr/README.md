@@ -11,3 +11,4 @@
 | [007](ADR-007-chaos-and-client-policy.md)   | Fault injection and client policy            | Accepted |
 | [008](ADR-008-real-mode-and-calibration.md) | Real mode on localhost, calibration          | Accepted |
 | [009](ADR-009-what-if-analysis.md)          | What-if analysis                             | Accepted |
+| [010](ADR-010-guided-scenarios.md)          | Guided scenarios and suggestions             | Accepted |

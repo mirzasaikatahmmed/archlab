@@ -233,6 +233,64 @@ describe("WhatIfTab", () => {
     expect(await screen.findByText(/must be between 2 and 24/)).toBeInTheDocument();
   });
 
+  it("suggests fixes and saves one as a variant", async () => {
+    const onChange = vi.fn<(w: WhatIf) => void>();
+    render(<WhatIfTab project={project} templates={templates} onChange={onChange} />);
+    await userEvent.click(screen.getByRole("button", { name: "Suggestions" }));
+    const send = await start("Suggest changes");
+    expect(api.startWhatIf.mock.calls[0]?.[2]).toEqual({ kind: "suggest" });
+    act(() => {
+      send({
+        kind: "finished",
+        result: {
+          kind: "suggest",
+          report: {
+            slo,
+            baseline: outcome(450, 0.2, false, 80),
+            target: "App server",
+            suggestions: [
+              {
+                title: "Run App server on 2 machines",
+                changes: ["App server ×2 replicas"],
+                changeDefs: [{ kind: "replicas", node: "app", count: 2 }],
+                outcome: outcome(45, 0, true, 180),
+                vsBaseline: { throughputPct: 125, p95Pct: -90, errorRatePoints: -20 },
+              },
+            ],
+          },
+        },
+      });
+    });
+    expect(await screen.findByText("The design misses its targets")).toBeInTheDocument();
+    expect(screen.getByText(/Aimed at: App server/)).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save Run App server on 2 machines as a variant" }),
+    );
+    const saved = onChange.mock.lastCall?.[0];
+    expect(saved?.variants).toHaveLength(2);
+    expect(saved?.variants[1]).toMatchObject({
+      name: "Run App server on 2 machines",
+      changes: [{ kind: "replicas", node: "app", count: 2 }],
+    });
+  });
+
+  it("says so when no change improves on the design", async () => {
+    render(<WhatIfTab project={project} templates={templates} onChange={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "Suggestions" }));
+    const send = await start("Suggest changes");
+    act(() => {
+      send({
+        kind: "finished",
+        result: {
+          kind: "suggest",
+          report: { slo, baseline: outcome(40, 0, true), target: null, suggestions: [] },
+        },
+      });
+    });
+    expect(await screen.findByText("The design already meets its targets")).toBeInTheDocument();
+    expect(screen.getByText(/No simple change improved/)).toBeInTheDocument();
+  });
+
   it("stops the analysis when the tab is closed", async () => {
     api.startWhatIf.mockResolvedValue(undefined);
     const { unmount } = render(

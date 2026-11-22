@@ -1,0 +1,233 @@
+{
+  "schemaVersion": 1,
+  "id": "retry-storm",
+  "title": "A retry storm",
+  "summary": "Retries rescue a brief failure but can turn a slowdown into an outage. See how clients make a struggling database worse, and how to retry politely.",
+  "level": "intermediate",
+  "minutes": 4,
+  "project": {
+    "name": "A retry storm",
+    "serverProfile": {
+      "os": "linux",
+      "cpuCores": 4,
+      "cpuGhz": 3.0,
+      "ramGb": 16.0,
+      "disk": {
+        "kind": "ssd",
+        "iops": 20000
+      },
+      "network": {
+        "bandwidthMbps": 1000.0,
+        "latencyMs": 0.5
+      },
+      "virtualization": "vm",
+      "fdLimit": 65536
+    },
+    "trafficProfile": {
+      "concurrentUsers": 1000,
+      "requestsPerSecond": 330.0,
+      "readRatio": 0.8,
+      "spike": {
+        "kind": "none"
+      }
+    },
+    "topology": {
+      "nodes": [
+        {
+          "id": "client",
+          "kind": "client",
+          "label": "Users",
+          "position": {
+            "x": 0,
+            "y": 120
+          },
+          "template": null,
+          "settings": {},
+          "replicas": 1
+        },
+        {
+          "id": "app",
+          "kind": "appServer",
+          "label": "App server",
+          "position": {
+            "x": 260,
+            "y": 120
+          },
+          "template": null,
+          "settings": {},
+          "replicas": 1
+        },
+        {
+          "id": "db",
+          "kind": "database",
+          "label": "Database",
+          "position": {
+            "x": 520,
+            "y": 120
+          },
+          "template": null,
+          "settings": {},
+          "replicas": 1
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-client-app",
+          "source": "client",
+          "target": "app"
+        },
+        {
+          "id": "e-app-db",
+          "source": "app",
+          "target": "db"
+        }
+      ]
+    },
+    "chaos": {
+      "faults": [],
+      "policy": {
+        "timeoutMs": 10000.0,
+        "maxRetries": 0,
+        "backoffMs": 100.0
+      }
+    },
+    "slo": {
+      "p95Ms": 200.0,
+      "maxErrorRate": 0.01
+    }
+  },
+  "steps": [
+    {
+      "title": "Everything is healthy",
+      "narration": [
+        "A small app talks to its database at 330 requests per second. The app server is fairly busy but coping, and the database is comfortable.",
+        "Clients give up after ten seconds and never retry."
+      ],
+      "highlight": ["db"],
+      "changes": [],
+      "play": {
+        "mode": "live",
+        "durationS": 60.0,
+        "speed": 8
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": true
+        }
+      ]
+    },
+    {
+      "title": "The database has a brownout",
+      "narration": [
+        "For fifteen seconds the database becomes eight times slower, perhaps because of a noisy neighbour. It can no longer keep up with 250 requests per second.",
+        "Requests pile up, some are rejected, and latency spikes. Then the slowdown ends and the system recovers."
+      ],
+      "highlight": ["db"],
+      "changes": [
+        {
+          "kind": "addFault",
+          "fault": {
+            "id": "brownout",
+            "target": "db",
+            "kind": {
+              "kind": "slowdown",
+              "factor": 8.0
+            },
+            "startS": 15.0,
+            "durationS": 15.0
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 60.0,
+        "speed": 8
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": false
+        },
+        {
+          "kind": "errorRateAbove",
+          "value": 0.02
+        },
+        {
+          "kind": "recoveryBelowS",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "title": "Clients retry",
+      "narration": [
+        "Now every failed request is tried again, up to three times, almost immediately. It sounds harmless, and for a brief blip it often helps.",
+        "Here it adds load to a database that is already drowning. Retries pile on top of the original requests, so the backlog is bigger and takes much longer to clear: the system needs roughly eight seconds to recover instead of one."
+      ],
+      "highlight": ["db"],
+      "changes": [
+        {
+          "kind": "setPolicy",
+          "policy": {
+            "timeoutMs": 10000.0,
+            "maxRetries": 3,
+            "backoffMs": 10.0
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 60.0,
+        "speed": 8
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": false
+        },
+        {
+          "kind": "recoveryAboveS",
+          "value": 5
+        }
+      ]
+    },
+    {
+      "title": "Fail fast instead",
+      "narration": [
+        "Stop retrying and give up after two seconds. During the brownout more requests now fail, but they fail quickly instead of hanging for many seconds.",
+        "With no extra load and no hopeless waiting requests, the database recovers within a second or two of the slowdown ending. Failing fast gives a struggling system room to recover."
+      ],
+      "highlight": ["db"],
+      "changes": [
+        {
+          "kind": "setPolicy",
+          "policy": {
+            "timeoutMs": 2000.0,
+            "maxRetries": 0,
+            "backoffMs": 100.0
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 60.0,
+        "speed": 8
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": false
+        },
+        {
+          "kind": "recoveryBelowS",
+          "value": 3
+        },
+        {
+          "kind": "p95BelowMs",
+          "value": 3000
+        }
+      ]
+    }
+  ]
+}

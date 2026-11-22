@@ -58,6 +58,8 @@ export interface Frame {
   time: number;
   motion: boolean;
   conditions: Conditions;
+  /** Indexes of nodes the narration is pointing at. */
+  highlight: ReadonlySet<number>;
 }
 
 type Poly = Pt[];
@@ -507,6 +509,20 @@ function drawTile(f: Frame, node: SceneNode, load: NodeLoad): void {
   ctx.stroke();
   ctx.globalAlpha = 1;
   const index = f.nodes.indexOf(node);
+  if (f.highlight.has(index)) {
+    const r = t + 14;
+    poly(ctx, [
+      P(node.gx - r, node.gy - r),
+      P(node.gx + r, node.gy - r),
+      P(node.gx + r, node.gy + r),
+      P(node.gx - r, node.gy + r),
+    ]);
+    ctx.globalAlpha = f.motion ? 0.55 + 0.4 * Math.sin(f.time * 3) : 0.9;
+    ctx.strokeStyle = f.palette.accent;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
   const cond = f.conditions.nodes[index];
   if (cond.slowFactor > 1 || cond.lostFraction > 0) {
     const r = t + 7;

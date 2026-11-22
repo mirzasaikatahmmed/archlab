@@ -1,0 +1,409 @@
+{
+  "schemaVersion": 1,
+  "id": "one-machine",
+  "title": "Everything on one machine",
+  "summary": "Follow a young product from one server to a load-balanced cluster: saturation, the ceiling of a bigger machine, and the single point of failure.",
+  "level": "beginner",
+  "minutes": 5,
+  "project": {
+    "name": "Everything on one machine",
+    "serverProfile": {
+      "os": "linux",
+      "cpuCores": 4,
+      "cpuGhz": 3.0,
+      "ramGb": 16.0,
+      "disk": {
+        "kind": "ssd",
+        "iops": 20000
+      },
+      "network": {
+        "bandwidthMbps": 1000.0,
+        "latencyMs": 0.5
+      },
+      "virtualization": "vm",
+      "fdLimit": 65536
+    },
+    "trafficProfile": {
+      "concurrentUsers": 1000,
+      "requestsPerSecond": 150.0,
+      "readRatio": 0.8,
+      "spike": {
+        "kind": "none"
+      }
+    },
+    "topology": {
+      "nodes": [
+        {
+          "id": "client",
+          "kind": "client",
+          "label": "Users",
+          "position": {
+            "x": 0,
+            "y": 120
+          },
+          "template": null,
+          "settings": {},
+          "replicas": 1
+        },
+        {
+          "id": "app",
+          "kind": "appServer",
+          "label": "Everything on one machine",
+          "position": {
+            "x": 280,
+            "y": 120
+          },
+          "template": null,
+          "settings": {},
+          "replicas": 1
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-client-app",
+          "source": "client",
+          "target": "app"
+        }
+      ]
+    },
+    "chaos": {
+      "faults": [],
+      "policy": {
+        "timeoutMs": 10000.0,
+        "maxRetries": 0,
+        "backoffMs": 100.0
+      }
+    },
+    "slo": {
+      "p95Ms": 200.0,
+      "maxErrorRate": 0.01
+    }
+  },
+  "steps": [
+    {
+      "title": "Today: one server is plenty",
+      "narration": [
+        "All your users talk to a single server. At 150 requests per second it is busy about a third of the time, so requests are answered quickly.",
+        "Watch the dashed column above the server: it is the machine's capacity. The coloured fill shows how much of it is in use."
+      ],
+      "highlight": ["app"],
+      "changes": [],
+      "play": {
+        "mode": "live",
+        "durationS": 30.0,
+        "speed": 5
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": true
+        },
+        {
+          "kind": "bottleneck",
+          "node": null
+        }
+      ]
+    },
+    {
+      "title": "Traffic triples",
+      "narration": [
+        "The product takes off and traffic jumps to 450 requests per second. This server can only do about 400, so work arrives faster than it leaves.",
+        "Requests queue up, latency climbs, and once the waiting room is full new requests are turned away."
+      ],
+      "highlight": ["app"],
+      "changes": [
+        {
+          "kind": "apply",
+          "change": {
+            "kind": "trafficRate",
+            "rps": 450.0
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 30.0,
+        "speed": 5
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": false
+        },
+        {
+          "kind": "bottleneck",
+          "node": "app"
+        },
+        {
+          "kind": "p95AboveMs",
+          "value": 200
+        }
+      ]
+    },
+    {
+      "title": "Buy a bigger machine",
+      "narration": [
+        "The quickest fix is vertical scaling: move to a machine with four times the cores. The same traffic now barely registers.",
+        "No design change, no new failure modes. This is why it is usually the first thing people try."
+      ],
+      "highlight": ["app"],
+      "changes": [
+        {
+          "kind": "apply",
+          "change": {
+            "kind": "server",
+            "field": "cpuCores",
+            "value": 16.0
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 30.0,
+        "speed": 5
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": true
+        },
+        {
+          "kind": "bottleneck",
+          "node": null
+        }
+      ]
+    },
+    {
+      "title": "Growth never stops",
+      "narration": [
+        "Traffic keeps growing, now past 2,000 requests per second. This is the biggest machine we are willing to buy, and it has run out of room.",
+        "There is always a ceiling on how big a single machine can be, and the price climbs faster than the capacity."
+      ],
+      "highlight": ["app"],
+      "changes": [
+        {
+          "kind": "apply",
+          "change": {
+            "kind": "trafficRate",
+            "rps": 2200.0
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 30.0,
+        "speed": 5
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": false
+        },
+        {
+          "kind": "bottleneck",
+          "node": "app"
+        }
+      ]
+    },
+    {
+      "title": "One machine is one point of failure",
+      "narration": [
+        "Back to a manageable 450 requests per second, but now the server crashes for fifteen seconds and then restarts.",
+        "While it is down, every single request fails. Capacity was not the problem this time: having only one of everything was."
+      ],
+      "highlight": ["app"],
+      "changes": [
+        {
+          "kind": "apply",
+          "change": {
+            "kind": "trafficRate",
+            "rps": 450.0
+          }
+        },
+        {
+          "kind": "addFault",
+          "fault": {
+            "id": "crash-a",
+            "target": "app",
+            "kind": {
+              "kind": "crash"
+            },
+            "startS": 10.0,
+            "durationS": 15.0
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 40.0,
+        "speed": 5
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": false
+        },
+        {
+          "kind": "errorRateAbove",
+          "value": 0.25
+        }
+      ]
+    },
+    {
+      "title": "Scale out behind a load balancer",
+      "narration": [
+        "Instead of one large machine, use three ordinary ones and put a load balancer in front. Each carries a third of the traffic.",
+        "The same crash now takes out a third of the capacity instead of all of it. This simple load balancer does not notice that a server is down, so a third of requests still land on it."
+      ],
+      "highlight": ["lb", "app", "app2", "app3"],
+      "changes": [
+        {
+          "kind": "apply",
+          "change": {
+            "kind": "server",
+            "field": "cpuCores",
+            "value": 4.0
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 40.0,
+        "speed": 5
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": false
+        },
+        {
+          "kind": "errorRateAbove",
+          "value": 0.03
+        },
+        {
+          "kind": "errorRateBelow",
+          "value": 0.3
+        }
+      ],
+      "topology": {
+        "nodes": [
+          {
+            "id": "client",
+            "kind": "client",
+            "label": "Users",
+            "position": {
+              "x": 0,
+              "y": 190
+            },
+            "template": null,
+            "settings": {},
+            "replicas": 1
+          },
+          {
+            "id": "lb",
+            "kind": "loadBalancer",
+            "label": "Load balancer",
+            "position": {
+              "x": 300,
+              "y": 190
+            },
+            "template": null,
+            "settings": {},
+            "replicas": 1
+          },
+          {
+            "id": "app",
+            "kind": "appServer",
+            "label": "Server A",
+            "position": {
+              "x": 620,
+              "y": 10
+            },
+            "template": null,
+            "settings": {},
+            "replicas": 1
+          },
+          {
+            "id": "app2",
+            "kind": "appServer",
+            "label": "Server B",
+            "position": {
+              "x": 620,
+              "y": 190
+            },
+            "template": null,
+            "settings": {},
+            "replicas": 1
+          },
+          {
+            "id": "app3",
+            "kind": "appServer",
+            "label": "Server C",
+            "position": {
+              "x": 620,
+              "y": 370
+            },
+            "template": null,
+            "settings": {},
+            "replicas": 1
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-client-lb",
+            "source": "client",
+            "target": "lb"
+          },
+          {
+            "id": "e-lb-app",
+            "source": "lb",
+            "target": "app"
+          },
+          {
+            "id": "e-lb-app2",
+            "source": "lb",
+            "target": "app2"
+          },
+          {
+            "id": "e-lb-app3",
+            "source": "lb",
+            "target": "app3"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Retries route around the failure",
+      "narration": [
+        "Teach clients to try again. A retry goes back through the load balancer, which usually picks a healthy server this time.",
+        "Most failed requests now succeed on their second or third attempt, so users barely notice the crash. Redundancy plus retries is what makes the design resilient."
+      ],
+      "highlight": ["lb"],
+      "changes": [
+        {
+          "kind": "setPolicy",
+          "policy": {
+            "timeoutMs": 10000.0,
+            "maxRetries": 3,
+            "backoffMs": 20.0
+          }
+        }
+      ],
+      "play": {
+        "mode": "live",
+        "durationS": 40.0,
+        "speed": 5
+      },
+      "expect": [
+        {
+          "kind": "meetsTargets",
+          "value": true
+        },
+        {
+          "kind": "errorRateBelow",
+          "value": 0.02
+        }
+      ]
+    }
+  ]
+}

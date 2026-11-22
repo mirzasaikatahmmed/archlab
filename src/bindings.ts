@@ -36,6 +36,10 @@ export const commands = {
 	/**  Runs a what-if analysis in the background, reporting progress and then the result. */
 	startWhatIf: (project: Project, options: SimOptions, request: WhatIfRequest, onEvent: Channel<WhatIfEvent>, _options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("start_what_if", { project, options, request, onEvent }, _options)),
 	cancelWhatIf: (options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("cancel_what_if", undefined, options)),
+	listScenarios: (options?: InvokeOptions) => __TAURI_INVOKE<ScenarioSummary[]>("list_scenarios", undefined, options),
+	getScenario: (id: string, options?: InvokeOptions) => typedError<ScenarioView, AppError>(__TAURI_INVOKE("get_scenario", { id }, options)),
+	/**  The design as it stands after `step` (counting from 0), as a new unsaved project. */
+	scenarioStepProject: (id: string, step: number, options?: InvokeOptions) => typedError<Project, AppError>(__TAURI_INVOKE("scenario_step_project", { id, step }, options)),
 };
 
 /* Types */
@@ -221,6 +225,8 @@ export type Latency = {
 	p99Ms: number | null,
 };
 
+export type Level = "beginner" | "intermediate";
+
 export type LiveCommand = { kind: "pause" } | { kind: "resume" } | { kind: "stop" } | 
 /**  Simulated seconds per wall-clock second; `None` runs as fast as possible. */
 { kind: "setSpeed"; speed: number | null };
@@ -301,6 +307,20 @@ export type Outcome = {
 	error: string | null,
 };
 
+export type Play = {
+	mode: PlayMode,
+	/**  Simulated seconds to run. */
+	durationS: number | null,
+	/**  Live speed: simulated seconds per real second; absent runs as fast as possible. */
+	speed?: number | null,
+};
+
+export type PlayMode = 
+/**  Streamed on the Stage as it happens. */
+"live" | 
+/**  Run to the end and show the report. */
+"instant";
+
 export type Position = {
 	x: number | null,
 	y: number | null,
@@ -352,6 +372,24 @@ export type RealReport = {
 	timeline: TimelinePoint[],
 	/**  Caveats that affect how far these numbers can be trusted. */
 	notes: string[],
+};
+
+export type ScenarioSummary = {
+	id: string,
+	title: string,
+	summary: string,
+	level: Level,
+	minutes: number,
+	stepCount: number,
+};
+
+export type ScenarioView = {
+	id: string,
+	title: string,
+	summary: string,
+	level: Level,
+	minutes: number,
+	steps: StepView[],
 };
 
 export type ServerField = "cpuCores" | "cpuGhz" | "ramGb" | "diskIops" | "networkBandwidthMbps" | "networkLatencyMs" | "fdLimit";
@@ -431,6 +469,34 @@ export type SpikePattern = { kind: "none" } |
 { kind: "step"; atS: number | null; multiplier: number | null; durationS: number | null } | 
 /**  Recurring spike every `period_s`, lasting `duration_s`. */
 { kind: "periodic"; periodS: number | null; multiplier: number | null; durationS: number | null };
+
+export type StepView = {
+	title: string,
+	narration: string[],
+	highlight: string[],
+	/**  What this step changes, in words. */
+	changes: string[],
+	play: Play,
+};
+
+export type SuggestReport = {
+	slo: Slo,
+	baseline: Outcome,
+	/**  The part the suggestions aim at: the bottleneck, or the busiest node. */
+	target: string | null,
+	/**  Best first; only changes that improve on the baseline are listed. */
+	suggestions: Suggestion[],
+};
+
+export type Suggestion = {
+	title: string,
+	/**  The changes, in words. */
+	changes: string[],
+	/**  The same changes in a form that can be saved as a variant. */
+	changeDefs: Change[],
+	outcome: Outcome,
+	vsBaseline: Deltas,
+};
 
 export type Summary = {
 	offered: number,
@@ -552,9 +618,11 @@ export type WhatIfRequest =
 /**  Baseline against the project's saved variants. */
 { kind: "compare" } | { kind: "sweep"; spec: SweepSpec } | 
 /**  Highest traffic that still meets the targets. */
-{ kind: "capacity" };
+{ kind: "capacity" } | 
+/**  Try likely fixes for the slowest part and rank them. */
+{ kind: "suggest" };
 
-export type WhatIfResult = { kind: "compare"; report: CompareReport } | { kind: "sweep"; report: SweepReport } | { kind: "capacity"; report: CapacityReport };
+export type WhatIfResult = { kind: "suggest"; report: SuggestReport } | { kind: "compare"; report: CompareReport } | { kind: "sweep"; report: SweepReport } | { kind: "capacity"; report: CapacityReport };
 
 /**  How the system behaved over a stretch of whole seconds. */
 export type WindowStats = {

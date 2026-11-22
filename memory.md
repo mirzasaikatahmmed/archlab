@@ -15,11 +15,11 @@ rusqlite_migration, `ProjectRepository`), runtime/detect (sysinfo), sim/ (model 
 
 ## Current state
 
-Phases 1-6 committed (4 commits on `feat/phase-6-real-mode`, unpushed). Phase 7 (what-if) is implemented on
-`feat/phase-7-what-if`, UNCOMMITTED. GUI never run by hand (`pnpm tauri dev`); visuals checked only in headless
-Chrome with a mocked backend; real-mode timing only in Rust tests; sim-vs-real divergence not yet measured by
-the user. Release builds are needed for meaningful calibration. Next: Phase 8 (scenarios; maybe auto-suggestions
-and live what-ifs).
+Phases 1-7 committed (5 commits on `feat/phase-7-what-if`, unpushed). Phase 8 (scenarios + suggestions) is
+implemented on `feat/phase-8-scenarios`, UNCOMMITTED. GUI never run by hand (`pnpm tauri dev`); visuals checked only
+in headless Chrome with a mocked backend; real-mode timing only in Rust tests; sim-vs-real divergence not measured by
+the user. Release builds needed for meaningful calibration. Next: Phase 9 (export JSON/Markdown/SVG/WebM; scenario
+import/export), then Phase 10 (packaging, signing, auto-update).
 
 ## Key decisions
 
@@ -34,6 +34,9 @@ and live what-ifs).
 - UI design (2026-11-22): tokens in `src/index.css` (dark default, light via `data-theme` or OS), indigo accent,
   system font, hand-made SVG icons (`Icon.tsx`), `Section` groups fields, `ThemeToggle` (localStorage, try/catch).
   Status colours = healthy/warning/saturated everywhere. Don't restyle bare `button`/`input` per component.
+- ADR-010: scenarios = embedded JSON (`src-tauri/scenarios/`, `domain/scenario.rs`), steps stack (topology/changes/
+  addFault/setPolicy/setTraffic), hidden `expect` claims tested in cargo, player uses `useLiveRun` + Stage highlight;
+  suggestions = `whatif/suggest.rs` (candidates for the bottleneck, ranked, save-as-variant). Scenario text English only.
 - ADR-009: what-if = typed `Change`s applied to a project copy (`domain/whatif.rs`), `TopologyNode.replicas`, tools
   compare/sweep/capacity in `whatif/` (parallel scoped threads; capacity = doubling then bisection), SLO + variants
   in `Project.whatif` (migration 004, schema v3); UI prunes variant changes for removed nodes.
@@ -68,4 +71,4 @@ See README. `pnpm check` runs all checks; `pnpm tauri dev` runs the app.
 
 ## Last updated
 
-2026-11-22: Phase 7 what-if (compare, sweep, capacity, replicas).
+2026-11-22: Phase 8 scenarios (5 guided stories, player) and what-if suggestions.

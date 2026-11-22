@@ -7,6 +7,7 @@ pub mod chaos;
 #[cfg(test)]
 mod limits_sync;
 pub mod project;
+pub mod scenario;
 pub mod server_profile;
 pub mod template;
 pub mod topology;
