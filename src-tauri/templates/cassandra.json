@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "cassandra",
+  "version": 1,
+  "name": "Cassandra",
+  "description": "Wide-column database built for heavy writes and horizontal scale.",
+  "nodeKinds": ["database"],
+  "settings": [
+    {
+      "key": "concurrent_writes",
+      "label": "Concurrent writes",
+      "unit": "threads",
+      "default": 32,
+      "min": 1,
+      "max": 1024,
+      "description": "Write threads (concurrent_writes)."
+    },
+    {
+      "key": "concurrent_reads",
+      "label": "Concurrent reads",
+      "unit": "threads",
+      "default": 32,
+      "min": 1,
+      "max": 1024,
+      "description": "Read threads (concurrent_reads); the larger of the two sets the pool."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 2.0,
+    "cpuFraction": 0.5,
+    "sigma": 0.7,
+    "writeMultiplier": 0.8,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 512,
+    "concurrencySetting": "concurrent_writes"
+  }
+}

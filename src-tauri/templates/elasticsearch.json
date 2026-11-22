@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "elasticsearch",
+  "version": 1,
+  "name": "Elasticsearch",
+  "description": "Search and analytics engine: index writes are costly, queries are CPU-heavy.",
+  "nodeKinds": ["search"],
+  "settings": [
+    {
+      "key": "search_threads",
+      "label": "Search threads",
+      "unit": "threads",
+      "default": 8,
+      "min": 1,
+      "max": 512,
+      "description": "Threads handling queries and indexing."
+    },
+    {
+      "key": "queue_size",
+      "label": "Queue size",
+      "unit": "req",
+      "default": 1000,
+      "min": 0,
+      "max": 100000,
+      "description": "Requests that may wait for a thread."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 8,
+    "cpuFraction": 0.7,
+    "sigma": 0.9,
+    "writeMultiplier": 4,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 1000,
+    "concurrencySetting": "search_threads",
+    "queueSetting": "queue_size"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "envoy",
+  "version": 1,
+  "name": "Envoy proxy",
+  "description": "Modern L7 proxy and load balancer with very low per-request overhead.",
+  "nodeKinds": ["loadBalancer", "apiGateway"],
+  "settings": [
+    {
+      "key": "worker_threads",
+      "label": "Worker threads",
+      "unit": "threads",
+      "default": 4,
+      "min": 1,
+      "max": 256,
+      "description": "Event-loop threads (--concurrency)."
+    },
+    {
+      "key": "max_connections",
+      "label": "Max connections",
+      "unit": "conn",
+      "default": 10000,
+      "min": 1,
+      "max": 1000000,
+      "description": "Open connections before new ones are refused."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 0.1,
+    "cpuFraction": 0.9,
+    "sigma": 0.3,
+    "writeMultiplier": 1,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 10000,
+    "concurrencySetting": "worker_threads",
+    "queueSetting": "max_connections"
+  }
+}

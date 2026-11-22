@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { CalibrationSection } from "./components/CalibrationSection";
+import { AdvisorPanel } from "./components/AdvisorPanel";
+import { BlueprintLibrary } from "./components/BlueprintLibrary";
 import { ChaosEditor } from "./components/ChaosEditor";
 import { Icon, type IconName } from "./components/Icon";
 import { ProjectSidebar } from "./components/ProjectSidebar";
@@ -7,13 +9,19 @@ import { ScenarioLibrary } from "./components/ScenarioLibrary";
 import { ScenarioPlayer } from "./components/ScenarioPlayer";
 import { SimulateTab } from "./components/SimulateTab";
 import { WhatIfTab } from "./components/WhatIfTab";
+import { UninstallButton } from "./components/UninstallButton";
 import { UpdateNotice } from "./components/UpdateNotice";
 import { ServerProfileForm } from "./components/ServerProfileForm";
 import { TrafficProfileEditor } from "./components/TrafficProfileEditor";
 import { TopologyCanvas } from "./components/topology/TopologyCanvas";
 import { useProjectStore } from "./store/projectStore";
 
-type View = { kind: "project" } | { kind: "library" } | { kind: "play"; id: string };
+type View =
+  | { kind: "project" }
+  | { kind: "library" }
+  | { kind: "blueprints" }
+  | { kind: "advisor" }
+  | { kind: "play"; id: string };
 
 type Tab = "server" | "traffic" | "topology" | "chaos" | "simulate" | "whatif";
 
@@ -30,6 +38,8 @@ export default function App() {
   const store = useProjectStore();
   const [tab, setTab] = useState<Tab>("server");
   const [view, setView] = useState<View>({ kind: "project" });
+  /** On narrow screens the sidebar is a menu that opens over the content. */
+  const [navOpen, setNavOpen] = useState(false);
   /** Bumped when calibration rewrites the profile, so the uncontrolled form reloads it. */
   const [formVersion, setFormVersion] = useState(0);
   const { current } = store;
@@ -39,28 +49,64 @@ export default function App() {
   }, []);
 
   return (
-    <div className="shell">
+    <div className="shell" data-nav={navOpen ? "open" : "closed"}>
+      <header className="mobile-bar">
+        <button
+          type="button"
+          className="icon-btn"
+          aria-expanded={navOpen}
+          aria-label={navOpen ? "Close menu" : "Open menu"}
+          onClick={() => {
+            setNavOpen((open) => !open);
+          }}
+        >
+          <Icon name={navOpen ? "close" : "menu"} />
+        </button>
+        <span className="brand">
+          <Icon name="logo" size={18} />
+          ArchLab
+        </span>
+      </header>
       <ProjectSidebar
         projects={store.projects}
         currentId={current?.id ?? null}
         busy={store.busy}
         onCreate={(name) => {
+          setNavOpen(false);
           setView({ kind: "project" });
           void store.createProject(name);
         }}
         onOpen={(id) => {
+          setNavOpen(false);
           setView({ kind: "project" });
           void store.openProject(id);
         }}
         onDelete={(id) => void store.deleteProject(id)}
         onOpenScenarios={() => {
+          setNavOpen(false);
           setView({ kind: "library" });
         }}
-        scenariosActive={view.kind !== "project"}
-        footer={<UpdateNotice />}
+        scenariosActive={view.kind === "library" || view.kind === "play"}
+        onOpenBlueprints={() => {
+          setNavOpen(false);
+          setView({ kind: "blueprints" });
+        }}
+        blueprintsActive={view.kind === "blueprints"}
+        onOpenAdvisor={() => {
+          setNavOpen(false);
+          setView({ kind: "advisor" });
+        }}
+        advisorActive={view.kind === "advisor"}
+        footer={
+          <>
+            <UpdateNotice />
+            <UninstallButton />
+          </>
+        }
         onImport={() => {
           void store.importFile().then((opened) => {
             if (opened) {
+              setNavOpen(false);
               setView({ kind: "project" });
             }
           });
@@ -82,7 +128,25 @@ export default function App() {
             )}
           </div>
         )}
-        {view.kind === "library" ? (
+        {view.kind === "advisor" ? (
+          <AdvisorPanel
+            onOpen={(project) => {
+              void store.importProject(project).then(() => {
+                setView({ kind: "project" });
+                setTab("simulate");
+              });
+            }}
+          />
+        ) : view.kind === "blueprints" ? (
+          <BlueprintLibrary
+            onUse={(project) => {
+              void store.importProject(project).then(() => {
+                setView({ kind: "project" });
+                setTab("simulate");
+              });
+            }}
+          />
+        ) : view.kind === "library" ? (
           <ScenarioLibrary
             onPlay={(id) => {
               setView({ kind: "play", id });

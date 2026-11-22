@@ -2,6 +2,7 @@
 //!
 //! Tauri commands in [`commands`] stay thin and delegate to the domain modules.
 
+pub mod advisor;
 pub mod chaos;
 pub mod commands;
 pub mod domain;
@@ -12,6 +13,7 @@ pub mod runtime;
 pub mod sim;
 pub mod state;
 pub mod storage;
+pub mod uninstall;
 pub mod whatif;
 
 use tauri::Manager;

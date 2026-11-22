@@ -2,6 +2,7 @@
 //! config templates and topology. No I/O lives here.
 
 pub mod app_info;
+pub mod blueprint;
 pub mod calibration;
 pub mod chaos;
 #[cfg(test)]
@@ -9,6 +10,7 @@ mod limits_sync;
 pub mod project;
 pub mod scenario;
 pub mod server_profile;
+pub mod sizing;
 pub mod template;
 pub mod topology;
 pub mod traffic;

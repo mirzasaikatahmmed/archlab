@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "id": "async-processing",
+  "title": "Async processing (queue + workers)",
+  "summary": "For work that does not need an immediate result: orders, emails, image processing. Requests return as soon as the job is queued.",
+  "requestsPerUserPerDay": 10,
+  "peakFactor": 5,
+  "readRatio": 0.0,
+  "slo": {
+    "p95Ms": 300,
+    "maxErrorRate": 0.01
+  },
+  "serverProfile": {
+    "os": "linux",
+    "cpuCores": 4,
+    "cpuGhz": 2.5,
+    "ramGb": 16,
+    "disk": {
+      "kind": "ssd",
+      "iops": 20000
+    },
+    "network": {
+      "bandwidthMbps": 1000,
+      "latencyMs": 0.5
+    },
+    "virtualization": "vm",
+    "fdLimit": 65536
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "c",
+        "kind": "client",
+        "label": "Users",
+        "position": {
+          "x": 0,
+          "y": 120
+        },
+        "template": null,
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "lb",
+        "kind": "loadBalancer",
+        "label": "Load balancer",
+        "position": {
+          "x": 200,
+          "y": 120
+        },
+        "template": {
+          "id": "nginx",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "app",
+        "kind": "appServer",
+        "label": "API servers",
+        "position": {
+          "x": 400,
+          "y": 120
+        },
+        "template": {
+          "id": "node",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "q",
+        "kind": "queue",
+        "label": "Job queue",
+        "position": {
+          "x": 600,
+          "y": 120
+        },
+        "template": {
+          "id": "rabbitmq",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "w",
+        "kind": "worker",
+        "label": "Workers",
+        "position": {
+          "x": 800,
+          "y": 120
+        },
+        "template": {
+          "id": "worker",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "db",
+        "kind": "database",
+        "label": "Database",
+        "position": {
+          "x": 1000,
+          "y": 120
+        },
+        "template": {
+          "id": "postgres",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-c-lb",
+        "source": "c",
+        "target": "lb"
+      },
+      {
+        "id": "e-lb-app",
+        "source": "lb",
+        "target": "app"
+      },
+      {
+        "id": "e-app-q",
+        "source": "app",
+        "target": "q"
+      },
+      {
+        "id": "e-q-w",
+        "source": "q",
+        "target": "w"
+      },
+      {
+        "id": "e-w-db",
+        "source": "w",
+        "target": "db"
+      }
+    ]
+  },
+  "tiers": [
+    {
+      "id": "100k",
+      "label": "100 thousand daily users",
+      "dailyUsers": 100000,
+      "runS": 60,
+      "replicas": {
+        "app": 1,
+        "w": 2
+      }
+    },
+    {
+      "id": "1m",
+      "label": "1 million daily users",
+      "dailyUsers": 1000000,
+      "runS": 60,
+      "replicas": {
+        "app": 2,
+        "w": 6
+      }
+    }
+  ],
+  "why": [
+    "The API only has to store the job, so users get a fast answer even when the work behind it is slow.",
+    "The queue absorbs spikes: it grows during a burst and the workers catch up afterwards.",
+    "Workers and the database are sized for the average, not the peak, which is cheaper than sizing for the peak."
+  ]
+}

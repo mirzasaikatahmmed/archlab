@@ -29,6 +29,10 @@ pub enum NodeKind {
     Cdn,
     /// Background consumer of a queue's messages.
     Worker,
+    /// Stores large objects (files, images); limited by network bandwidth, not CPU.
+    ObjectStorage,
+    /// Search engine: heavy reads, slower writes (indexing).
+    Search,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]

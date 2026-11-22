@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "go-service",
+  "version": 1,
+  "name": "Go service",
+  "description": "Compiled service with lightweight goroutines: fast per request, very high concurrency.",
+  "nodeKinds": ["appServer"],
+  "settings": [
+    {
+      "key": "max_concurrency",
+      "label": "Max concurrency",
+      "unit": "req",
+      "default": 512,
+      "min": 1,
+      "max": 1000000,
+      "description": "Requests handled at once (goroutines)."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 4,
+    "cpuFraction": 0.65,
+    "sigma": 0.5,
+    "writeMultiplier": 1,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 1024,
+    "concurrencySetting": "max_concurrency"
+  }
+}

@@ -44,14 +44,25 @@ external dependencies for end users. **All simulation results are estimates.**
   virtualization, file-descriptor limit. Fill it manually or click **Detect this machine**
   (sysinfo). Detected values that are guessed (disk IOPS, network, virtualization) are listed as
   notes; they are defaults, not measurements.
-- **Config templates**: Nginx, Node.js, PostgreSQL, MySQL, MongoDB, Redis, Memcached, RabbitMQ,
-  Kafka, API gateway, CDN edge and background worker. Embedded versioned JSON in
+- **Config templates**: Nginx, Node.js, Go, Java (Spring), HAProxy, Envoy, API gateway, CDN edge,
+  PostgreSQL, MySQL, MongoDB, Cassandra, DynamoDB-style, Redis, Memcached, RabbitMQ, Kafka, Pulsar,
+  SQS-style queue, Elasticsearch, S3-style storage and background worker. Embedded versioned JSON in
   `src-tauri/templates/`; pick one per node and override settings. Numbers are rough guides.
 - **Node types**: client, load balancer, app server, database, cache, queue, **API gateway** (rate
-  limit), **CDN** (serves a share of reads at the edge) and **worker**. A queue with workers after
+  limit), **CDN** (serves a share of reads at the edge), **worker**, **object storage** (limited by
+  network bandwidth) and **search**. A queue with workers after
   it is asynchronous: producers get an answer once the message is stored, and the report shows
   what is still waiting. See [ADR-014](docs/adr/ADR-014-more-node-types.md). Real mode does not
   support these three behaviours.
+- **Blueprints** (sidebar): seven ready-made architectures (simple web app, read-heavy site, async
+  processing, microservices, write-heavy ingestion, media and files, and a 1M+ users architecture),
+  each in sizes from 10 thousand to 10 million daily users. Every size is simulated in the test suite
+  and meets its targets. "Use this design" opens an editable project. See
+  [ADR-015](docs/adr/ADR-015-blueprints.md).
+- **Design advisor** (sidebar): describe your product (users, requests per user, read share, peak,
+  what it mostly does, availability, machine size, latency and error targets); it picks an
+  architecture, sizes it, simulates it and explains why. Local and deterministic, no network or AI
+  service. See [ADR-016](docs/adr/ADR-016-design-advisor.md).
 - **Traffic profile**: concurrent users, requests/s, read/write ratio, spike pattern (none, step,
   periodic).
 - **Topology canvas**: Client, LoadBalancer, AppServer, Database, Cache, Queue nodes connected by
@@ -107,6 +118,14 @@ external dependencies for end users. **All simulation results are estimates.**
   this computer, found via `ARCHLAB_FFMPEG`, next to the app, or on `PATH`. See
   [ADR-011](docs/adr/ADR-011-export.md).
 
+- **Uninstall** (sidebar, "Uninstall ArchLab..."): removes an installed copy after a confirmation that
+  says exactly what happens (macOS: to the Trash; Windows: starts the uninstaller; Linux: deletes the
+  AppImage or removes the package). Your projects are kept unless you tick the box to delete them.
+  A development build or an unpacked copy is refused. See
+  [ADR-017](docs/adr/ADR-017-updates-uninstall-responsive.md).
+- **Small screens:** below 900 px the sidebar becomes a menu, tabs scroll sideways and controls grow
+  on touch screens; the window can be as small as 360 x 480.
+
 ### Adding a template
 
 1. Add `src-tauri/templates/<id>.json` (copy an existing one; `id`, `version`, `nodeKinds`,
@@ -132,8 +151,9 @@ external dependencies for end users. **All simulation results are estimates.**
   Keep the private update key safe: without it, installed apps cannot be updated.
 - **Unsigned builds:** macOS asks you to approve the app (System Settings, Privacy & Security, "Open
   Anyway"); Windows SmartScreen shows "More info", then "Run anyway".
-- **Updates:** the app checks GitHub Releases at startup (switch off in the sidebar) and installs a
-  newer signed version on request. This works only while the repository is public.
+- **Updates:** the app checks GitHub Releases at startup (switch off in the sidebar), shows the
+  release notes and a progress bar, installs a newer signed version on request and restarts. It
+  needs a **published** release (a draft has no public update file).
   See [ADR-012](docs/adr/ADR-012-packaging-and-updates.md).
 
 ## Third-party software
@@ -167,6 +187,7 @@ src-tauri/src/
 scripts/             Release helpers: ffmpeg fetch (pinned, checksummed), version check
 src-tauri/templates/ Embedded config template JSON
 src-tauri/scenarios/ Embedded guided scenario JSON
+src-tauri/blueprints/ Embedded blueprint JSON (architectures in sizes)
 docs/adr/            Architecture decision records
 ```
 
@@ -187,4 +208,4 @@ Rule: no business logic in the UI; commands only delegate to the Rust modules.
 
 ## Documentation
 
-- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode, ADR-009 what-if, ADR-010 scenarios, ADR-011 export, ADR-012 packaging and updates, ADR-013 live controls, ADR-014 more node types
+- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode, ADR-009 what-if, ADR-010 scenarios, ADR-011 export, ADR-012 packaging and updates, ADR-013 live controls, ADR-014 more node types, ADR-015 blueprints, ADR-016 design advisor, ADR-017 updates, uninstall and small screens

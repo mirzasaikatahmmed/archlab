@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "id": "write-heavy-ingestion",
+  "title": "Write-heavy ingestion (Kafka)",
+  "summary": "For telemetry, events and logs: very many small writes. A log-based broker takes the burst, consumers write to a store built for writes.",
+  "requestsPerUserPerDay": 200,
+  "peakFactor": 3,
+  "readRatio": 0.02,
+  "slo": {
+    "p95Ms": 300,
+    "maxErrorRate": 0.01
+  },
+  "serverProfile": {
+    "os": "linux",
+    "cpuCores": 4,
+    "cpuGhz": 2.5,
+    "ramGb": 16,
+    "disk": {
+      "kind": "ssd",
+      "iops": 20000
+    },
+    "network": {
+      "bandwidthMbps": 1000,
+      "latencyMs": 0.5
+    },
+    "virtualization": "vm",
+    "fdLimit": 65536
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "c",
+        "kind": "client",
+        "label": "Devices",
+        "position": {
+          "x": 0,
+          "y": 120
+        },
+        "template": null,
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "gw",
+        "kind": "apiGateway",
+        "label": "API gateway",
+        "position": {
+          "x": 200,
+          "y": 120
+        },
+        "template": {
+          "id": "envoy",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "ingest",
+        "kind": "appServer",
+        "label": "Ingest servers",
+        "position": {
+          "x": 400,
+          "y": 120
+        },
+        "template": {
+          "id": "go-service",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "k",
+        "kind": "queue",
+        "label": "Kafka",
+        "position": {
+          "x": 600,
+          "y": 120
+        },
+        "template": {
+          "id": "kafka",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "w",
+        "kind": "worker",
+        "label": "Consumers",
+        "position": {
+          "x": 800,
+          "y": 120
+        },
+        "template": {
+          "id": "worker",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "db",
+        "kind": "database",
+        "label": "Cassandra",
+        "position": {
+          "x": 1000,
+          "y": 120
+        },
+        "template": {
+          "id": "cassandra",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-c-gw",
+        "source": "c",
+        "target": "gw"
+      },
+      {
+        "id": "e-gw-ingest",
+        "source": "gw",
+        "target": "ingest"
+      },
+      {
+        "id": "e-ingest-k",
+        "source": "ingest",
+        "target": "k"
+      },
+      {
+        "id": "e-k-w",
+        "source": "k",
+        "target": "w"
+      },
+      {
+        "id": "e-w-db",
+        "source": "w",
+        "target": "db"
+      }
+    ]
+  },
+  "tiers": [
+    {
+      "id": "100k",
+      "label": "100 thousand daily users",
+      "dailyUsers": 100000,
+      "runS": 60,
+      "replicas": {
+        "ingest": 2,
+        "w": 7,
+        "db": 1
+      }
+    },
+    {
+      "id": "1m",
+      "label": "1 million daily users",
+      "dailyUsers": 1000000,
+      "runS": 20,
+      "replicas": {
+        "gw": 2,
+        "ingest": 12,
+        "k": 3,
+        "w": 60,
+        "db": 4
+      }
+    }
+  ],
+  "why": [
+    "Producers only wait for the broker to append the message, so ingestion stays fast while consumers are busy.",
+    "Cassandra is built for sustained writes; the consumers write to it at a steady pace.",
+    "If the consumers fall behind, the backlog grows in the broker: watch the 'still waiting' number in the results."
+  ]
+}

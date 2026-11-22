@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "java-spring",
+  "version": 1,
+  "name": "Java (Spring Boot)",
+  "description": "Servlet-style Java service with a request thread pool.",
+  "nodeKinds": ["appServer"],
+  "settings": [
+    {
+      "key": "tomcat_threads",
+      "label": "Tomcat threads",
+      "unit": "threads",
+      "default": 200,
+      "min": 1,
+      "max": 10000,
+      "description": "Maximum request threads (server.tomcat.threads.max)."
+    },
+    {
+      "key": "accept_count",
+      "label": "Accept queue",
+      "unit": "conn",
+      "default": 100,
+      "min": 0,
+      "max": 100000,
+      "description": "Connections that may wait for a free thread (server.tomcat.accept-count)."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 14,
+    "cpuFraction": 0.6,
+    "sigma": 0.6,
+    "writeMultiplier": 1,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 100,
+    "concurrencySetting": "tomcat_threads",
+    "queueSetting": "accept_count"
+  }
+}

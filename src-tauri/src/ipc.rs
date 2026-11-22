@@ -4,13 +4,17 @@ use specta_typescript::Typescript;
 use tauri_specta::{Builder, ErrorHandlingMode, collect_commands};
 
 use crate::commands::{
-    app, calibration, detect, export, project, real, scenarios, simulation, templates, whatif,
+    advisor, app, blueprints, calibration, detect, export, project, real, scenarios, simulation,
+    templates, uninstall, whatif,
 };
 
 pub fn builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()
         .commands(collect_commands![
             app::app_info,
+            app::restart_app,
+            uninstall::uninstall_plan,
+            uninstall::uninstall_app,
             detect::detect_machine,
             templates::list_templates,
             project::list_projects,
@@ -32,6 +36,10 @@ pub fn builder() -> Builder<tauri::Wry> {
             scenarios::list_scenarios,
             scenarios::get_scenario,
             scenarios::scenario_step_project,
+            blueprints::list_blueprints,
+            blueprints::blueprint_project,
+            advisor::advise_design,
+            advisor::default_requirements,
             export::pick_save_path,
             export::pick_open_path,
             export::export_project_json,

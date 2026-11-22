@@ -15,12 +15,13 @@ rusqlite_migration, `ProjectRepository`), runtime/detect (sysinfo), sim/ (model 
 
 ## Current state
 
-Phases 1-10 are on `main`; live controls (ADR-013) committed on `feat/live-controls` (`6d2e093`, not merged); more node types (ADR-014) on `feat/more-nodes`, UNCOMMITTED (pushed to private GitHub repo `mirzasaikatahmmed/archlab`, head `dffc04f`). GUI never run by hand (`pnpm tauri dev`); visuals checked only
+Phases 1-10, live controls (ADR-013) and new node types (ADR-014) are on `main` (pushed to private GitHub repo
+`mirzasaikatahmmed/archlab`, head `d54ee46`). GUI never run by hand (`pnpm tauri dev`); visuals checked only
 in headless Chrome with a mocked backend; real-mode timing only in Rust tests; sim-vs-real divergence not measured by
 the user. Release builds needed for meaningful calibration. Video needs a system ffmpeg (libvpx-vp9); not
-yet run end to end with a real ffmpeg (none installed here; encoder tested with a fake script). Release workflow (tag `v*` -> draft release)
-never run yet; signing secrets not set; updates need a public repo. Local release build + 8 s launch OK on macOS.
-Scenario import/export deferred. Next: first tag/draft release, then polish.
+yet run end to end with a real ffmpeg (none installed here; encoder tested with a fake script). First release `v0.1.0` exists as a DRAFT on GitHub (ADR-012). Updates need a public repo. Local release build
+
+- 8 s launch OK on macOS. Scenario import/export deferred. Blueprints, the design advisor, object storage/search nodes and 10 more templates are on `feat/blueprints-advisor`, UNCOMMITTED. Next: try the app by hand, publish the draft, polish.
 
 ## Key decisions
 
@@ -72,8 +73,10 @@ Scenario import/export deferred. Next: first tag/draft release, then polish.
   2.12). Update key at `~/.tauri/archlab-updater.key` (NOT in repo; secret `TAURI_SIGNING_PRIVATE_KEY`). Sidecar
   `archlab-ffmpeg` (Win/Linux only, LGPL, pinned in scripts/ffmpeg-manifest.json); macOS uses brew ffmpeg.
   `createUpdaterArtifacts`/`externalBin` live only in `tauri.release.conf.json`/`tauri.ffmpeg.conf.json` overlays.
-- GitHub Actions are DISABLED on the repo by the user (2026-11-22), so CI and the release workflow do not run; re-enable
-  in repo Settings > Actions before relying on them. Phase 10 (`dffc04f`) is merged and pushed to `main`.
+- GitHub Actions re-enabled by the user (2026-11-22). CI is green on all 3 OSes (main `d54ee46`); Windows needed
+  `src-tauri/windows-app.manifest` embedded in every target (build.rs) so Rust tests start. Secret `TAURI_SIGNING_PRIVATE_KEY`
+  is set. Tag `v0.1.0` built a DRAFT release (4 installers sets + latest.json, all signed); not published, unsigned for
+  macOS/Windows OS signing, updates need a public repo.
 - `.gitattributes` forces LF: without it the Windows CI job failed `format:check` (CRLF checkout). First CI run on `main`:
   macOS green, Windows stopped at format (rest unverified), Linux build step cancelled (unknown): re-run to confirm.
 - Live controls (ADR-013): `sim/control.rs` (ControlCommand/ControlRecord), `Simulation::apply_control`, `LiveRuns::control`
@@ -82,6 +85,16 @@ Scenario import/export deferred. Next: first tag/draft release, then polish.
 - Node types (ADR-014): `apiGateway` (token-bucket rate limit), `cdn` (read hits end at the edge), `worker`; a Queue with
   Worker children is async (`NodeModel.async_queue`, backlog in `NodeState`, jobs are `Request{job_of}`); `NodeReport.backlog`.
   Queue without workers is unchanged. Real mode refuses the new behaviours. 8 new templates (JSON only).
+- Blueprints (ADR-015): `src-tauri/blueprints/*.json` + `domain/blueprint.rs`; every tier is simulated by a cargo test (meets
+  SLO, nodes <85% busy). Tune with a builder script (not in repo) and `cargo test print_blueprints -- --ignored --nocapture`.
+  `domain/sizing.rs` = users -> peak rps. Object storage (payload/bandwidth) and search kinds added.
+- Advisor (ADR-016): `src-tauri/src/advisor/mod.rs`; rules choose the blueprint, a loop adds copies where busy >55%, the verdict
+  comes from the simulated final design; refuses peak >25k rps. Native number inputs with `step` + `min` can silently block
+  form submit (use `step="any"` + `noValidate`).
+- Uninstall (ADR-017): `src-tauri/src/uninstall/mod.rs`; pure `choose`/`describe` tested everywhere, only installed copies
+  (mac /Applications bundle, Windows uninstall.exe, Linux AppImage or dpkg-owned) are acted on; dev builds refused. Windows/
+  Linux-package paths unrun. Responsive: <900px sidebar = menu (`data-nav` on `.shell`); `.tabs` needs `flex:none` or it
+  collapses when scrollable. Repo is PUBLIC since 2026-11-22; v0.1.0 is still a draft (updates need a published release).
 - sysinfo 0.40: `System::new()` and `Disks::new_with_refreshed_list()` return `Result`.
 
 ## Setup and run

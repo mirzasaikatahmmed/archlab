@@ -304,6 +304,8 @@ fn defaults_for(kind: NodeKind) -> SimParams {
         hit_ratio_setting: None,
         rate_limit_setting: None,
         backlog_setting: None,
+        payload_setting: None,
+        default_payload_kb: 0.0,
     };
     match kind {
         NodeKind::Client => p(0.001, 1.0, 0.0, 1.0, 0),
@@ -315,6 +317,11 @@ fn defaults_for(kind: NodeKind) -> SimParams {
         NodeKind::ApiGateway => p(0.4, 0.8, 0.4, 1.0, 2048),
         NodeKind::Cdn => p(0.15, 0.8, 0.4, 1.0, 4096),
         NodeKind::Worker => p(20.0, 0.6, 0.6, 1.0, 64),
+        NodeKind::Search => p(8.0, 0.7, 0.9, 4.0, 256),
+        NodeKind::ObjectStorage => SimParams {
+            default_payload_kb: 256.0,
+            ..p(2.0, 0.2, 0.6, 2.0, 512)
+        },
     }
 }
 
@@ -379,7 +386,14 @@ fn node_model(node: &TopologyNode, server: &ServerProfile) -> NodeModel {
         model.servers = servers.min(capacity);
         model.capacity = capacity;
     }
-    model.read_ms = cpu_ms + io_ms;
+    // What a request moves shares the network between the node's workers, so a node with many
+    // large transfers is limited by bandwidth however many workers it has.
+    let payload_kb = setting(&params.payload_setting)
+        .unwrap_or(params.default_payload_kb)
+        .max(0.0);
+    // Per machine: every replica has its own network link.
+    let transfer_ms = payload_kb * 8.192 / server.network.bandwidth_mbps.max(1.0) * servers.round();
+    model.read_ms = cpu_ms + io_ms + transfer_ms;
     if model.read_ms > 0.0 {
         model.cpu_share = cpu_ms / model.read_ms;
     }

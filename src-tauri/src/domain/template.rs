@@ -13,7 +13,14 @@ pub const TEMPLATE_SCHEMA_VERSION: u32 = 1;
 /// Add a new template by dropping a JSON file in `templates/` and listing it here.
 const EMBEDDED: &[&str] = &[
     include_str!("../../templates/api-gateway.json"),
+    include_str!("../../templates/cassandra.json"),
     include_str!("../../templates/cdn.json"),
+    include_str!("../../templates/dynamodb.json"),
+    include_str!("../../templates/elasticsearch.json"),
+    include_str!("../../templates/envoy.json"),
+    include_str!("../../templates/go-service.json"),
+    include_str!("../../templates/haproxy.json"),
+    include_str!("../../templates/java-spring.json"),
     include_str!("../../templates/kafka.json"),
     include_str!("../../templates/memcached.json"),
     include_str!("../../templates/mongodb.json"),
@@ -21,8 +28,11 @@ const EMBEDDED: &[&str] = &[
     include_str!("../../templates/nginx.json"),
     include_str!("../../templates/node.json"),
     include_str!("../../templates/postgres.json"),
+    include_str!("../../templates/pulsar.json"),
     include_str!("../../templates/rabbitmq.json"),
     include_str!("../../templates/redis.json"),
+    include_str!("../../templates/s3.json"),
+    include_str!("../../templates/sqs.json"),
     include_str!("../../templates/worker.json"),
 ];
 
@@ -71,6 +81,13 @@ pub struct SimParams {
     /// Setting holding how many messages a queue may hold (queues with workers only).
     #[serde(default)]
     pub backlog_setting: Option<String>,
+    /// Setting holding the size of what one request moves, in KB. Adds transfer time on the
+    /// server profile's network, shared between the node's workers.
+    #[serde(default)]
+    pub payload_setting: Option<String>,
+    /// Payload in KB when `payload_setting` is absent or unset; 0 means no transfer time.
+    #[serde(default)]
+    pub default_payload_kb: f64,
 }
 
 impl SimParams {
@@ -87,12 +104,19 @@ impl SimParams {
             10_000.0,
         );
         issues.range_u32("defaultQueue", self.default_queue, 0, 10_000_000);
+        issues.range_f64(
+            "defaultPayloadKb",
+            self.default_payload_kb,
+            0.0,
+            10_000_000.0,
+        );
         for (field, key) in [
             ("concurrencySetting", &self.concurrency_setting),
             ("queueSetting", &self.queue_setting),
             ("hitRatioSetting", &self.hit_ratio_setting),
             ("rateLimitSetting", &self.rate_limit_setting),
             ("backlogSetting", &self.backlog_setting),
+            ("payloadSetting", &self.payload_setting),
         ] {
             if let Some(key) = key {
                 issues.check(
@@ -219,7 +243,14 @@ mod tests {
             ids,
             [
                 "api-gateway",
+                "cassandra",
                 "cdn",
+                "dynamodb",
+                "elasticsearch",
+                "envoy",
+                "go-service",
+                "haproxy",
+                "java-spring",
                 "kafka",
                 "memcached",
                 "mongodb",
@@ -227,8 +258,11 @@ mod tests {
                 "nginx",
                 "node",
                 "postgres",
+                "pulsar",
                 "rabbitmq",
                 "redis",
+                "s3",
+                "sqs",
                 "worker"
             ]
         );

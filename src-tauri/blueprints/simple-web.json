@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "id": "simple-web",
+  "title": "Simple web app",
+  "summary": "One load balancer, an app server and a database. The right starting point until traffic or availability outgrows a single database.",
+  "requestsPerUserPerDay": 20,
+  "peakFactor": 5,
+  "readRatio": 0.8,
+  "slo": {
+    "p95Ms": 300,
+    "maxErrorRate": 0.01
+  },
+  "serverProfile": {
+    "os": "linux",
+    "cpuCores": 4,
+    "cpuGhz": 2.5,
+    "ramGb": 16,
+    "disk": {
+      "kind": "ssd",
+      "iops": 20000
+    },
+    "network": {
+      "bandwidthMbps": 1000,
+      "latencyMs": 0.5
+    },
+    "virtualization": "vm",
+    "fdLimit": 65536
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "c",
+        "kind": "client",
+        "label": "Users",
+        "position": {
+          "x": 0,
+          "y": 120
+        },
+        "template": null,
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "lb",
+        "kind": "loadBalancer",
+        "label": "Load balancer",
+        "position": {
+          "x": 220,
+          "y": 120
+        },
+        "template": {
+          "id": "nginx",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "app",
+        "kind": "appServer",
+        "label": "App server",
+        "position": {
+          "x": 440,
+          "y": 120
+        },
+        "template": {
+          "id": "node",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "db",
+        "kind": "database",
+        "label": "Database",
+        "position": {
+          "x": 660,
+          "y": 120
+        },
+        "template": {
+          "id": "postgres",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-c-lb",
+        "source": "c",
+        "target": "lb"
+      },
+      {
+        "id": "e-lb-app",
+        "source": "lb",
+        "target": "app"
+      },
+      {
+        "id": "e-app-db",
+        "source": "app",
+        "target": "db"
+      }
+    ]
+  },
+  "tiers": [
+    {
+      "id": "10k",
+      "label": "10 thousand daily users",
+      "dailyUsers": 10000,
+      "runS": 60,
+      "replicas": {
+        "app": 1
+      }
+    },
+    {
+      "id": "100k",
+      "label": "100 thousand daily users",
+      "dailyUsers": 100000,
+      "runS": 60,
+      "replicas": {
+        "app": 2
+      }
+    }
+  ],
+  "why": [
+    "A load balancer in front lets you add app servers later without changing anything else.",
+    "The database is a single copy: simple, but a single point of failure. That is why this design stops at 100 thousand users.",
+    "Reads and writes both go to the one database, so it is the first thing to saturate if the app fleet grows."
+  ]
+}

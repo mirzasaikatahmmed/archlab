@@ -945,3 +945,70 @@ mod new_nodes {
         assert!(q.queue > 500, "the tick's queue counts the backlog: {q:?}");
     }
 }
+
+mod object_storage_and_search {
+    use super::*;
+
+    fn store(rps: f64, object_kb: f64, replicas: u32) -> Project {
+        let t = topology(
+            &[("c", NodeKind::Client), ("s3", NodeKind::ObjectStorage)],
+            &[("c", "s3")],
+        );
+        let mut p = project(t, rps, 1.0);
+        p.server_profile.cpu_cores = 8;
+        p.server_profile.network.bandwidth_mbps = 1000.0;
+        let node = &mut p.topology.nodes[1];
+        node.template = Some(TemplateRef {
+            id: "s3".to_owned(),
+            version: 1,
+        });
+        node.settings = BTreeMap::from([("object_kb".to_owned(), object_kb)]);
+        node.replicas = replicas;
+        p
+    }
+
+    #[test]
+    fn object_storage_is_limited_by_bandwidth_not_by_workers() {
+        // 1,000 Mbps moves about 122 objects of 1 MB per second, however many workers there are.
+        let light = run(&store(80.0, 1024.0, 1), &options(3, 40.0)).expect("run");
+        assert!(light.summary.error_rate < 0.01, "{:?}", light.summary);
+        let heavy = run(&store(200.0, 1024.0, 1), &options(3, 40.0)).expect("run");
+        assert!(heavy.summary.error_rate > 0.1 || heavy.summary.latency.p95_ms > 1_000.0);
+        assert_eq!(
+            heavy.bottleneck.as_ref().map(|b| b.node_id.as_str()),
+            Some("s3")
+        );
+        // Each replica is a machine with its own link, so a second one doubles the ceiling.
+        let doubled = run(&store(200.0, 1024.0, 2), &options(3, 40.0)).expect("run");
+        assert!(doubled.summary.error_rate < 0.01, "{:?}", doubled.summary);
+    }
+
+    #[test]
+    fn smaller_objects_are_served_faster() {
+        let small = run(&store(40.0, 16.0, 1), &options(3, 30.0)).expect("run");
+        let large = run(&store(40.0, 2048.0, 1), &options(3, 30.0)).expect("run");
+        assert!(
+            large.summary.latency.mean_ms > small.summary.latency.mean_ms * 3.0,
+            "{} vs {}",
+            small.summary.latency.mean_ms,
+            large.summary.latency.mean_ms
+        );
+    }
+
+    #[test]
+    fn a_search_node_indexes_slower_than_it_queries() {
+        let t = topology(
+            &[("c", NodeKind::Client), ("es", NodeKind::Search)],
+            &[("c", "es")],
+        );
+        let mut reads = project(t.clone(), 50.0, 1.0);
+        reads.server_profile.cpu_cores = 8;
+        let mut writes = project(t, 50.0, 0.0);
+        writes.server_profile.cpu_cores = 8;
+        let (r, w) = (
+            run(&reads, &options(3, 30.0)).expect("run"),
+            run(&writes, &options(3, 30.0)).expect("run"),
+        );
+        assert!(w.summary.latency.mean_ms > r.summary.latency.mean_ms * 2.5);
+    }
+}

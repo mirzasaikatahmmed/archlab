@@ -9,7 +9,7 @@ describe("TopologyCanvas", () => {
   it("offers every node kind in the palette", () => {
     render(<TopologyCanvas topology={topology} templates={templates} onChange={vi.fn()} />);
     const toolbar = screen.getByRole("toolbar", { name: "Add node" });
-    expect(toolbar.querySelectorAll("button")).toHaveLength(9);
+    expect(toolbar.querySelectorAll("button")).toHaveLength(11);
     for (const label of [
       "Client",
       "Load balancer",
@@ -20,6 +20,8 @@ describe("TopologyCanvas", () => {
       "API gateway",
       "CDN",
       "Worker",
+      "Object storage",
+      "Search",
     ]) {
       expect(screen.getByRole("button", { name: `+ ${label}` })).toBeInTheDocument();
     }

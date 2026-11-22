@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "id": "read-heavy-site",
+  "title": "Read-heavy site (CDN + cache)",
+  "summary": "For sites that are mostly reading: articles, catalogues, profiles. A CDN and a cache keep most reads away from the database.",
+  "requestsPerUserPerDay": 40,
+  "peakFactor": 5,
+  "readRatio": 0.95,
+  "slo": {
+    "p95Ms": 300,
+    "maxErrorRate": 0.01
+  },
+  "serverProfile": {
+    "os": "linux",
+    "cpuCores": 4,
+    "cpuGhz": 2.5,
+    "ramGb": 16,
+    "disk": {
+      "kind": "ssd",
+      "iops": 20000
+    },
+    "network": {
+      "bandwidthMbps": 1000,
+      "latencyMs": 0.5
+    },
+    "virtualization": "vm",
+    "fdLimit": 65536
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "c",
+        "kind": "client",
+        "label": "Users",
+        "position": {
+          "x": 0,
+          "y": 140
+        },
+        "template": null,
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "cdn",
+        "kind": "cdn",
+        "label": "CDN",
+        "position": {
+          "x": 200,
+          "y": 140
+        },
+        "template": {
+          "id": "cdn",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "lb",
+        "kind": "loadBalancer",
+        "label": "Load balancer",
+        "position": {
+          "x": 400,
+          "y": 140
+        },
+        "template": {
+          "id": "nginx",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "app",
+        "kind": "appServer",
+        "label": "App servers",
+        "position": {
+          "x": 600,
+          "y": 140
+        },
+        "template": {
+          "id": "node",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "cache",
+        "kind": "cache",
+        "label": "Cache",
+        "position": {
+          "x": 820,
+          "y": 40
+        },
+        "template": {
+          "id": "redis",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "db",
+        "kind": "database",
+        "label": "Database",
+        "position": {
+          "x": 820,
+          "y": 240
+        },
+        "template": {
+          "id": "postgres",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-c-cdn",
+        "source": "c",
+        "target": "cdn"
+      },
+      {
+        "id": "e-cdn-lb",
+        "source": "cdn",
+        "target": "lb"
+      },
+      {
+        "id": "e-lb-app",
+        "source": "lb",
+        "target": "app"
+      },
+      {
+        "id": "e-app-cache",
+        "source": "app",
+        "target": "cache"
+      },
+      {
+        "id": "e-app-db",
+        "source": "app",
+        "target": "db"
+      }
+    ]
+  },
+  "tiers": [
+    {
+      "id": "100k",
+      "label": "100 thousand daily users",
+      "dailyUsers": 100000,
+      "runS": 60,
+      "replicas": {
+        "app": 2
+      }
+    },
+    {
+      "id": "1m",
+      "label": "1 million daily users",
+      "dailyUsers": 1000000,
+      "runS": 60,
+      "replicas": {
+        "app": 3
+      }
+    }
+  ],
+  "why": [
+    "The CDN answers most reads at the edge, so they never reach your servers.",
+    "Reads that get past the CDN try the cache before the database; a good hit ratio takes most of the load off the database.",
+    "Only writes and cache misses reach the database, so a handful of copies is enough even at a million users."
+  ]
+}

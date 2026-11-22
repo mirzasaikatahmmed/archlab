@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "id": "million-users",
+  "title": "1M+ users architecture",
+  "summary": "The full stack for a read-heavy product at scale: CDN, gateway, load balancers, an app fleet, a cache and a sharded database.",
+  "requestsPerUserPerDay": 20,
+  "peakFactor": 5,
+  "readRatio": 0.9,
+  "slo": {
+    "p95Ms": 300,
+    "maxErrorRate": 0.01
+  },
+  "serverProfile": {
+    "os": "linux",
+    "cpuCores": 4,
+    "cpuGhz": 2.5,
+    "ramGb": 16,
+    "disk": {
+      "kind": "ssd",
+      "iops": 20000
+    },
+    "network": {
+      "bandwidthMbps": 1000,
+      "latencyMs": 0.5
+    },
+    "virtualization": "vm",
+    "fdLimit": 65536
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "c",
+        "kind": "client",
+        "label": "Users",
+        "position": {
+          "x": 0,
+          "y": 160
+        },
+        "template": null,
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "cdn",
+        "kind": "cdn",
+        "label": "CDN",
+        "position": {
+          "x": 200,
+          "y": 160
+        },
+        "template": {
+          "id": "cdn",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "gw",
+        "kind": "apiGateway",
+        "label": "API gateway",
+        "position": {
+          "x": 400,
+          "y": 160
+        },
+        "template": {
+          "id": "envoy",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "lb",
+        "kind": "loadBalancer",
+        "label": "Load balancers",
+        "position": {
+          "x": 600,
+          "y": 160
+        },
+        "template": {
+          "id": "haproxy",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "app",
+        "kind": "appServer",
+        "label": "App servers",
+        "position": {
+          "x": 800,
+          "y": 160
+        },
+        "template": {
+          "id": "go-service",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "cache",
+        "kind": "cache",
+        "label": "Cache cluster",
+        "position": {
+          "x": 1020,
+          "y": 60
+        },
+        "template": {
+          "id": "redis",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "db",
+        "kind": "database",
+        "label": "Database shards",
+        "position": {
+          "x": 1020,
+          "y": 260
+        },
+        "template": {
+          "id": "postgres",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-c-cdn",
+        "source": "c",
+        "target": "cdn"
+      },
+      {
+        "id": "e-cdn-gw",
+        "source": "cdn",
+        "target": "gw"
+      },
+      {
+        "id": "e-gw-lb",
+        "source": "gw",
+        "target": "lb"
+      },
+      {
+        "id": "e-lb-app",
+        "source": "lb",
+        "target": "app"
+      },
+      {
+        "id": "e-app-cache",
+        "source": "app",
+        "target": "cache"
+      },
+      {
+        "id": "e-app-db",
+        "source": "app",
+        "target": "db"
+      }
+    ]
+  },
+  "tiers": [
+    {
+      "id": "1m",
+      "label": "1 million daily users",
+      "dailyUsers": 1000000,
+      "runS": 60,
+      "replicas": {
+        "cdn": 2,
+        "gw": 2,
+        "lb": 2,
+        "app": 3,
+        "cache": 2,
+        "db": 2
+      }
+    },
+    {
+      "id": "10m",
+      "label": "10 million daily users",
+      "dailyUsers": 10000000,
+      "runS": 20,
+      "replicas": {
+        "cdn": 2,
+        "gw": 2,
+        "lb": 2,
+        "app": 5,
+        "cache": 2,
+        "db": 4
+      }
+    }
+  ],
+  "why": [
+    "Every layer has more than one copy, so losing one machine does not take the system down.",
+    "The CDN and cache absorb most reads; the database only sees writes and the reads that miss both.",
+    "The database is split across shards, each owning a share of the data, so writes scale out as well as reads.",
+    "At 10 million daily users the peak is over ten thousand requests per second; run the simulation for 20 seconds, which fits the simulator's event limit."
+  ]
+}

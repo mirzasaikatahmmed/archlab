@@ -24,6 +24,8 @@ pub fn kind_name(kind: NodeKind) -> &'static str {
         NodeKind::ApiGateway => "API gateway",
         NodeKind::Cdn => "CDN",
         NodeKind::Worker => "Worker",
+        NodeKind::ObjectStorage => "Object storage",
+        NodeKind::Search => "Search",
     }
 }
 

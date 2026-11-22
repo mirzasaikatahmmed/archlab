@@ -88,4 +88,45 @@ describe("ProjectSidebar", () => {
     await userEvent.click(screen.getByRole("button", { name: "Import project" }));
     expect(onImport).toHaveBeenCalledTimes(1);
   });
+
+  it("offers the blueprint library only when a handler is given", async () => {
+    const { rerender } = render(
+      <ProjectSidebar projects={[]} currentId={null} busy={false} {...handlers()} />,
+    );
+    expect(screen.queryByRole("button", { name: "Blueprints" })).not.toBeInTheDocument();
+    const onOpenBlueprints = vi.fn();
+    rerender(
+      <ProjectSidebar
+        projects={[]}
+        currentId={null}
+        busy={false}
+        {...handlers()}
+        onOpenBlueprints={onOpenBlueprints}
+        blueprintsActive
+      />,
+    );
+    const button = screen.getByRole("button", { name: "Blueprints" });
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(button);
+    expect(onOpenBlueprints).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers the design advisor only when a handler is given", async () => {
+    const { rerender } = render(
+      <ProjectSidebar projects={[]} currentId={null} busy={false} {...handlers()} />,
+    );
+    expect(screen.queryByRole("button", { name: "Design advisor" })).not.toBeInTheDocument();
+    const onOpenAdvisor = vi.fn();
+    rerender(
+      <ProjectSidebar
+        projects={[]}
+        currentId={null}
+        busy={false}
+        {...handlers()}
+        onOpenAdvisor={onOpenAdvisor}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Design advisor" }));
+    expect(onOpenAdvisor).toHaveBeenCalledTimes(1);
+  });
 });

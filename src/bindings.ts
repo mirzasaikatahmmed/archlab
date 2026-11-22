@@ -6,6 +6,15 @@ import type { InvokeOptions } from "@tauri-apps/api/core";
 /** Commands */
 export const commands = {
 	appInfo: (options?: InvokeOptions) => __TAURI_INVOKE<AppInfo>("app_info", undefined, options),
+	/**  Quits and starts the app again, to finish an update. */
+	restartApp: (options?: InvokeOptions) => __TAURI_INVOKE<void>("restart_app", undefined, options),
+	/**  What uninstalling would do on this computer, for the confirmation. Changes nothing. */
+	uninstallPlan: (options?: InvokeOptions) => __TAURI_INVOKE<UninstallPlan>("uninstall_plan", undefined, options),
+	/**
+	 *  Uninstalls ArchLab, then quits. The plan is worked out again here: the window is not trusted
+	 *  to say what to delete. `delete_data` also removes the person's projects and settings.
+	 */
+	uninstallApp: (deleteData: boolean, options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("uninstall_app", { deleteData }, options)),
 	detectMachine: (options?: InvokeOptions) => __TAURI_INVOKE<DetectedProfile>("detect_machine", undefined, options),
 	listTemplates: (options?: InvokeOptions) => __TAURI_INVOKE<ConfigTemplate[]>("list_templates", undefined, options),
 	listProjects: (options?: InvokeOptions) => typedError<ProjectSummary[], AppError>(__TAURI_INVOKE("list_projects", undefined, options)),
@@ -45,6 +54,16 @@ export const commands = {
 	getScenario: (id: string, options?: InvokeOptions) => typedError<ScenarioView, AppError>(__TAURI_INVOKE("get_scenario", { id }, options)),
 	/**  The design as it stands after `step` (counting from 0), as a new unsaved project. */
 	scenarioStepProject: (id: string, step: number, options?: InvokeOptions) => typedError<Project, AppError>(__TAURI_INVOKE("scenario_step_project", { id, step }, options)),
+	listBlueprints: (options?: InvokeOptions) => __TAURI_INVOKE<BlueprintView[]>("list_blueprints", undefined, options),
+	/**  The blueprint at one size, as a new unsaved project. */
+	blueprintProject: (id: string, tier: string, options?: InvokeOptions) => typedError<Project, AppError>(__TAURI_INVOKE("blueprint_project", { id, tier }, options)),
+	/**
+	 *  Designs a system for the requirements and checks it by simulation. Runs on a worker thread:
+	 *  it simulates several candidate designs.
+	 */
+	adviseDesign: (requirements: Requirements, options?: InvokeOptions) => typedError<Advice, AppError>(__TAURI_INVOKE("advise_design", { requirements }, options)),
+	/**  What the advisor assumes when the form is first shown. */
+	defaultRequirements: (options?: InvokeOptions) => __TAURI_INVOKE<Requirements>("default_requirements", undefined, options),
 	/**  Asks where to save. `None` means the person cancelled. */
 	pickSavePath: (kind: ExportKind, fileName: string, options?: InvokeOptions) => typedError<string | null, AppError>(__TAURI_INVOKE("pick_save_path", { kind, fileName }, options)),
 	/**  Asks which project file to open. `None` means the person cancelled. */
@@ -66,6 +85,25 @@ export const commands = {
 };
 
 /* Types */
+export type Advice = {
+	blueprintId: string,
+	blueprintTitle: string,
+	peakRps: number | null,
+	machines: number,
+	meetsTargets: boolean,
+	/**  Rounds of "simulate, then add copies" it took. */
+	rounds: number,
+	nodes: NodeChoice[],
+	/**  Plain-language reasons, in reading order. */
+	rationale: string[],
+	/**  What could not be satisfied, and what to try. */
+	warnings: string[],
+	assumptions: string[],
+	project: Project,
+	/**  The simulation of the final design. */
+	report: SimReport,
+};
+
 /**  Error returned by every Tauri command, typed on the TypeScript side. */
 export type AppError = { kind: "validation"; issues: FieldIssue[] } | { kind: "notFound"; id: string } | { kind: "storage"; message: string } | { kind: "simulation"; message: string } | { kind: "runtime"; message: string };
 
@@ -74,6 +112,14 @@ export type AppInfo = {
 	name: string,
 	version: string,
 };
+
+export type Availability = 
+/**  Planned downtime and rare outages are fine. */
+"standard" | 
+/**  No single point of failure in the stateless layers (about 99.9%). */
+"high" | 
+/**  Survive losing any one machine anywhere (about 99.99%). */
+"critical";
 
 /**
  *  What a message queue did: how much it took in, how much was worked off, and how long
@@ -90,6 +136,19 @@ export type Backlog = {
 	left: number,
 	/**  Time from being queued to a worker picking the message up. */
 	lag: Latency,
+};
+
+export type BlueprintView = {
+	id: string,
+	title: string,
+	summary: string,
+	requestsPerUserPerDay: number | null,
+	peakFactor: number | null,
+	readRatio: number | null,
+	slo: Slo,
+	tiers: TierView[],
+	why: string[],
+	topology: Topology,
 };
 
 export type Bottleneck = {
@@ -322,6 +381,8 @@ export type LiveTick = {
 	activeFaults: string[],
 };
 
+export type Machine = "small" | "medium" | "large";
+
 export type NetworkProfile = {
 	bandwidthMbps: number | null,
 	latencyMs: number | null,
@@ -334,13 +395,27 @@ export type NodeBrief = {
 	severity: Severity,
 };
 
+/**  How one node of the design ended up. */
+export type NodeChoice = {
+	id: string,
+	label: string,
+	kind: NodeKind,
+	copies: number,
+	/**  How busy it is at peak. */
+	utilization: number | null,
+};
+
 export type NodeKind = "client" | "loadBalancer" | "appServer" | "database" | "cache" | "queue" | 
 /**  Entry point that can limit the request rate (see `rate_limit_rps`). */
 "apiGateway" | 
 /**  Edge cache in front of the load balancer; absorbs a share of reads. */
 "cdn" | 
 /**  Background consumer of a queue's messages. */
-"worker";
+"worker" | 
+/**  Stores large objects (files, images); limited by network bandwidth, not CPU. */
+"objectStorage" | 
+/**  Search engine: heavy reads, slower writes (indexing). */
+"search";
 
 export type NodeReport = {
 	id: string,
@@ -446,6 +521,21 @@ export type RealReport = {
 	notes: string[],
 };
 
+/**  What the person tells the advisor. */
+export type Requirements = {
+	dailyUsers: number,
+	requestsPerUserPerDay: number | null,
+	/**  Share of requests that only read, 0..=1. */
+	readRatio: number | null,
+	/**  Busiest moment compared with the daily average. */
+	peakFactor: number | null,
+	shape: Shape,
+	availability: Availability,
+	machine: Machine,
+	p95Ms: number | null,
+	maxErrorRate: number | null,
+};
+
 export type ScenarioSummary = {
 	id: string,
 	title: string,
@@ -478,6 +568,18 @@ export type ServerProfile = {
 };
 
 export type Severity = "healthy" | "warning" | "saturated";
+
+export type Shape = 
+/**  Pages and APIs for people (a website, an app backend). */
+"web" | 
+/**  Large files and media (images, video, downloads). */
+"files" | 
+/**  Work that can finish later (orders, emails, processing). */
+"jobs" | 
+/**  Very many small writes (telemetry, events, logs). */
+"events" | 
+/**  Many independent services, each with its own data. */
+"services";
 
 export type SimOptions = {
 	/**  Same seed and inputs always give the same report. */
@@ -516,6 +618,13 @@ export type SimParams = {
 	rateLimitSetting?: string | null,
 	/**  Setting holding how many messages a queue may hold (queues with workers only). */
 	backlogSetting?: string | null,
+	/**
+	 *  Setting holding the size of what one request moves, in KB. Adds transfer time on the
+	 *  server profile's network, shared between the node's workers.
+	 */
+	payloadSetting?: string | null,
+	/**  Payload in KB when `payload_setting` is absent or unset; 0 means no transfer time. */
+	defaultPayloadKb?: number | null,
 };
 
 export type SimReport = {
@@ -628,6 +737,17 @@ export type TemplateSetting = {
 	description: string,
 };
 
+export type TierView = {
+	id: string,
+	label: string,
+	dailyUsers: number,
+	/**  Requests per second at the busiest moment. */
+	peakRps: number | null,
+	runS: number | null,
+	/**  Number of machines (every copy of every node except clients). */
+	machines: number,
+};
+
 /**  Metrics for one second of simulated time. */
 export type TimelinePoint = {
 	tS: number,
@@ -666,6 +786,18 @@ export type TrafficProfile = {
 	/**  Fraction of requests that are reads, 0..=1. Writes are `1 - read_ratio`. */
 	readRatio: number | null,
 	spike: SpikePattern,
+};
+
+/**  What the person is shown before they confirm. */
+export type UninstallPlan = {
+	supported: boolean,
+	/**  One line: what will happen. */
+	title: string,
+	details: string[],
+	asksForPassword: boolean,
+	/**  Whether the app can delete the person's projects and settings as part of this. */
+	canRemoveData: boolean,
+	dataDir: string,
 };
 
 export type Variant = {

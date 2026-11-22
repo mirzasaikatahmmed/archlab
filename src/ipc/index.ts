@@ -3,7 +3,9 @@ import { check } from "@tauri-apps/plugin-updater";
 import {
   commands,
   type AppError,
+  type Advice,
   type AppInfo,
+  type BlueprintView,
   type Calibration,
   type ControlRecord,
   type CalibrationEvent,
@@ -15,6 +17,7 @@ import {
   type LiveCommand,
   type LiveEvent,
   type Project,
+  type Requirements,
   type ProjectSummary,
   type RealEvent,
   type ScenarioSummary,
@@ -22,6 +25,7 @@ import {
   type ServerProfile,
   type SimOptions,
   type SimReport,
+  type UninstallPlan,
   type WhatIfEvent,
   type WhatIfRequest,
 } from "../bindings";
@@ -42,8 +46,21 @@ export type {
 /** A newer version found by the updater. */
 export interface AvailableUpdate {
   version: string;
-  /** Downloads, verifies the signature and installs; the app must be restarted afterwards. */
-  install: () => Promise<void>;
+  /** Release notes, when the release has any. */
+  notes: string | null;
+  /**
+   * Downloads, verifies the signature and installs; the app must be restarted afterwards.
+   * `onProgress` gets the share downloaded (0 to 1), or null when the size is unknown.
+   */
+  install: (onProgress: (fraction: number | null) => void) => Promise<void>;
+}
+
+/** The updater throws plain strings as well as errors; this turns either into text. */
+export function updateErrorText(err: unknown): string {
+  const detail = err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  return detail.trim() === ""
+    ? "Could not reach the update server. Try again later."
+    : `Could not check for updates: ${detail.trim()}`;
 }
 
 /** Thrown when a Rust command returns a typed error. */
@@ -91,6 +108,12 @@ export async function unwrap<T>(result: Promise<Result<T>>): Promise<T> {
 /** Typed facade over the generated bindings; every method throws CommandError on failure. */
 export const api = {
   appInfo: (): Promise<AppInfo> => commands.appInfo(),
+  /** What uninstalling would do on this computer. Changes nothing. */
+  uninstallPlan: (): Promise<UninstallPlan> => commands.uninstallPlan(),
+  /** Uninstalls the app and quits; `deleteData` also removes projects and settings. */
+  uninstallApp: (deleteData: boolean): Promise<null> => unwrap(commands.uninstallApp(deleteData)),
+  /** Quits and starts the app again, to finish an update. */
+  restartApp: (): Promise<void> => commands.restartApp(),
   detectMachine: (): Promise<DetectedProfile> => commands.detectMachine(),
   listTemplates: (): Promise<ConfigTemplate[]> => commands.listTemplates(),
   listProjects: (): Promise<ProjectSummary[]> => unwrap(commands.listProjects()),
@@ -154,6 +177,14 @@ export const api = {
   /** The design after `step` (counting from 0) of a scenario, as a new unsaved project. */
   scenarioStepProject: (id: string, step: number): Promise<Project> =>
     unwrap(commands.scenarioStepProject(id, step)),
+  listBlueprints: (): Promise<BlueprintView[]> => commands.listBlueprints(),
+  /** Designs and simulates a system for the requirements; can take a few seconds. */
+  adviseDesign: (requirements: Requirements): Promise<Advice> =>
+    unwrap(commands.adviseDesign(requirements)),
+  defaultRequirements: (): Promise<Requirements> => commands.defaultRequirements(),
+  /** A blueprint at one size, as a new unsaved project. */
+  blueprintProject: (id: string, tier: string): Promise<Project> =>
+    unwrap(commands.blueprintProject(id, tier)),
   /** Opens a Save dialog; null when cancelled. */
   pickSavePath: (kind: ExportKind, fileName: string): Promise<string | null> =>
     unwrap(commands.pickSavePath(kind, fileName)),
@@ -181,7 +212,27 @@ export const api = {
   /** Asks the update server for a newer version; null when this one is current. */
   checkForUpdate: async (): Promise<AvailableUpdate | null> => {
     const update = await check();
-    return update ? { version: update.version, install: () => update.downloadAndInstall() } : null;
+    if (!update) {
+      return null;
+    }
+    return {
+      version: update.version,
+      notes: update.body ?? null,
+      install: (onProgress) => {
+        let total = 0;
+        let received = 0;
+        return update.downloadAndInstall((event) => {
+          if (event.event === "Started") {
+            total = event.data.contentLength ?? 0;
+          } else if (event.event === "Progress") {
+            received += event.data.chunkLength;
+            onProgress(total > 0 ? Math.min(1, received / total) : null);
+          } else {
+            onProgress(1);
+          }
+        });
+      },
+    };
   },
   videoFinish: (): Promise<number> => unwrap(commands.videoFinish()),
   videoCancel: (): Promise<null> => unwrap(commands.videoCancel()),

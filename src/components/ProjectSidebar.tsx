@@ -13,6 +13,12 @@ interface Props {
   /** Opens the scenario library; the button is hidden when absent. */
   onOpenScenarios?: () => void;
   scenariosActive?: boolean;
+  /** Opens the blueprint library; the button is hidden when absent. */
+  onOpenBlueprints?: () => void;
+  blueprintsActive?: boolean;
+  /** Opens the design advisor; the button is hidden when absent. */
+  onOpenAdvisor?: () => void;
+  advisorActive?: boolean;
   /** Opens a project file; the button is hidden when absent. */
   onImport?: () => void;
   /** Extra content for the foot of the sidebar, such as the update notice. */
@@ -28,6 +34,10 @@ export function ProjectSidebar({
   onDelete,
   onOpenScenarios,
   scenariosActive = false,
+  onOpenBlueprints,
+  blueprintsActive = false,
+  onOpenAdvisor,
+  advisorActive = false,
   onImport,
   footer,
 }: Props) {
@@ -49,6 +59,28 @@ export function ProjectSidebar({
         >
           <Icon name="book" />
           Scenarios
+        </button>
+      )}
+      {onOpenBlueprints && (
+        <button
+          type="button"
+          className="nav-button"
+          aria-pressed={blueprintsActive}
+          onClick={onOpenBlueprints}
+        >
+          <Icon name="layers" />
+          Blueprints
+        </button>
+      )}
+      {onOpenAdvisor && (
+        <button
+          type="button"
+          className="nav-button"
+          aria-pressed={advisorActive}
+          onClick={onOpenAdvisor}
+        >
+          <Icon name="advisor" />
+          Design advisor
         </button>
       )}
       <form

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "s3",
+  "version": 1,
+  "name": "Object storage (S3-style)",
+  "description": "Stores files and images. Each request moves the object over the network, so bandwidth sets the ceiling.",
+  "nodeKinds": ["objectStorage"],
+  "settings": [
+    {
+      "key": "parallel_requests",
+      "label": "Parallel requests",
+      "unit": "req",
+      "default": 128,
+      "min": 1,
+      "max": 100000,
+      "description": "Transfers in flight at once."
+    },
+    {
+      "key": "object_kb",
+      "label": "Object size",
+      "unit": "KB",
+      "default": 512,
+      "min": 1,
+      "max": 10000000,
+      "description": "Typical size of one object. Transfer time shares the server's network bandwidth."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 2,
+    "cpuFraction": 0.2,
+    "sigma": 0.6,
+    "writeMultiplier": 2,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 512,
+    "concurrencySetting": "parallel_requests",
+    "payloadSetting": "object_kb",
+    "defaultPayloadKb": 512
+  }
+}

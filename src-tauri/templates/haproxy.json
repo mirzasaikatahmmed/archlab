@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "haproxy",
+  "version": 1,
+  "name": "HAProxy",
+  "description": "High-performance TCP and HTTP load balancer.",
+  "nodeKinds": ["loadBalancer"],
+  "settings": [
+    {
+      "key": "nbthread",
+      "label": "Threads",
+      "unit": "threads",
+      "default": 4,
+      "min": 1,
+      "max": 256,
+      "description": "Worker threads (nbthread)."
+    },
+    {
+      "key": "maxconn",
+      "label": "Max connections",
+      "unit": "conn",
+      "default": 20000,
+      "min": 1,
+      "max": 1000000,
+      "description": "Maximum concurrent connections."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 0.1,
+    "cpuFraction": 0.9,
+    "sigma": 0.3,
+    "writeMultiplier": 1,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 20000,
+    "concurrencySetting": "nbthread",
+    "queueSetting": "maxconn"
+  }
+}

@@ -28,6 +28,8 @@ const KIND_COLOR: Record<NodeKind, string> = {
   apiGateway: "#a3e635",
   cdn: "#22d3ee",
   worker: "#f97316",
+  objectStorage: "#2dd4bf",
+  search: "#c084fc",
 };
 
 export function readPalette(el: Element): Palette {
@@ -283,6 +285,32 @@ function drawObject(f: Frame, node: SceneNode, load: NodeLoad): void {
       }
       box(f, gx, gy, 5, 5, 11, 18, color);
       dot(f, P(gx + 11, gy + 15, 9), 1.5, status(f, load));
+      break;
+    }
+    case "objectStorage": {
+      for (const z of [0, 11, 22]) {
+        box(f, gx, gy, 20, 14, 8, z, color);
+        dot(f, P(gx + 14, gy + 14, z + 4), 1.3, status(f, load));
+      }
+      break;
+    }
+    case "search": {
+      cylinder(f, gx - 4, gy - 4, 11, 8, color);
+      for (const [a, b] of [
+        [-4, 0],
+        [0, -4],
+        [4, 0],
+        [0, 4],
+      ] as const) {
+        line(
+          f,
+          P(gx - 4 + a * 2.2, gy - 4 + b * 2.2, 8),
+          P(gx - 4 + a * 2.2, gy - 4 + b * 2.2, 20),
+          color,
+          0.5,
+        );
+      }
+      line(f, P(gx + 4, gy + 4, 4), P(gx + 18, gy + 18, 4), color, 0.9, 3);
       break;
     }
     case "client":

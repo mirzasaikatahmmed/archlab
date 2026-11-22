@@ -1,0 +1,233 @@
+{
+  "schemaVersion": 1,
+  "id": "microservices",
+  "title": "Microservices behind a gateway",
+  "summary": "Separate services for users, orders and the catalogue, each with its own data store, behind one API gateway.",
+  "requestsPerUserPerDay": 30,
+  "peakFactor": 5,
+  "readRatio": 0.85,
+  "slo": {
+    "p95Ms": 300,
+    "maxErrorRate": 0.01
+  },
+  "serverProfile": {
+    "os": "linux",
+    "cpuCores": 4,
+    "cpuGhz": 2.5,
+    "ramGb": 16,
+    "disk": {
+      "kind": "ssd",
+      "iops": 20000
+    },
+    "network": {
+      "bandwidthMbps": 1000,
+      "latencyMs": 0.5
+    },
+    "virtualization": "vm",
+    "fdLimit": 65536
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "c",
+        "kind": "client",
+        "label": "Users",
+        "position": {
+          "x": 0,
+          "y": 200
+        },
+        "template": null,
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "gw",
+        "kind": "apiGateway",
+        "label": "API gateway",
+        "position": {
+          "x": 200,
+          "y": 200
+        },
+        "template": {
+          "id": "envoy",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "users",
+        "kind": "appServer",
+        "label": "Users service",
+        "position": {
+          "x": 420,
+          "y": 60
+        },
+        "template": {
+          "id": "go-service",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "orders",
+        "kind": "appServer",
+        "label": "Orders service",
+        "position": {
+          "x": 420,
+          "y": 200
+        },
+        "template": {
+          "id": "java-spring",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "catalog",
+        "kind": "appServer",
+        "label": "Catalogue service",
+        "position": {
+          "x": 420,
+          "y": 340
+        },
+        "template": {
+          "id": "go-service",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "udb",
+        "kind": "database",
+        "label": "Users DB",
+        "position": {
+          "x": 660,
+          "y": 60
+        },
+        "template": {
+          "id": "postgres",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "odb",
+        "kind": "database",
+        "label": "Orders DB",
+        "position": {
+          "x": 660,
+          "y": 200
+        },
+        "template": {
+          "id": "mysql",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "ccache",
+        "kind": "cache",
+        "label": "Catalogue cache",
+        "position": {
+          "x": 660,
+          "y": 300
+        },
+        "template": {
+          "id": "redis",
+          "version": 2
+        },
+        "settings": {},
+        "replicas": 1
+      },
+      {
+        "id": "cdb",
+        "kind": "database",
+        "label": "Catalogue DB",
+        "position": {
+          "x": 660,
+          "y": 400
+        },
+        "template": {
+          "id": "mongodb",
+          "version": 1
+        },
+        "settings": {},
+        "replicas": 1
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-c-gw",
+        "source": "c",
+        "target": "gw"
+      },
+      {
+        "id": "e-gw-users",
+        "source": "gw",
+        "target": "users"
+      },
+      {
+        "id": "e-gw-orders",
+        "source": "gw",
+        "target": "orders"
+      },
+      {
+        "id": "e-gw-catalog",
+        "source": "gw",
+        "target": "catalog"
+      },
+      {
+        "id": "e-users-udb",
+        "source": "users",
+        "target": "udb"
+      },
+      {
+        "id": "e-orders-odb",
+        "source": "orders",
+        "target": "odb"
+      },
+      {
+        "id": "e-catalog-ccache",
+        "source": "catalog",
+        "target": "ccache"
+      },
+      {
+        "id": "e-catalog-cdb",
+        "source": "catalog",
+        "target": "cdb"
+      }
+    ]
+  },
+  "tiers": [
+    {
+      "id": "100k",
+      "label": "100 thousand daily users",
+      "dailyUsers": 100000,
+      "runS": 60,
+      "replicas": {}
+    },
+    {
+      "id": "1m",
+      "label": "1 million daily users",
+      "dailyUsers": 1000000,
+      "runS": 60,
+      "replicas": {
+        "users": 2,
+        "orders": 3,
+        "catalog": 2,
+        "gw": 2
+      }
+    }
+  ],
+  "why": [
+    "Each service owns its data, so teams can change and scale them independently.",
+    "The gateway is the single entry point: it is where rate limits and authentication belong.",
+    "In this model the gateway sends an equal share of traffic to each service; real traffic is rarely this even."
+  ]
+}

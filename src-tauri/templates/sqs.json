@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "sqs",
+  "version": 1,
+  "name": "Amazon SQS-style queue",
+  "description": "Managed message queue with effectively unlimited depth. With worker nodes after it, requests return once the message is stored.",
+  "nodeKinds": ["queue"],
+  "settings": [
+    {
+      "key": "api_parallelism",
+      "label": "API parallelism",
+      "unit": "req",
+      "default": 64,
+      "min": 1,
+      "max": 10000,
+      "description": "Publish requests handled at once."
+    },
+    {
+      "key": "max_messages",
+      "label": "Max messages",
+      "unit": "messages",
+      "default": 100000000,
+      "min": 1,
+      "max": 1000000000,
+      "description": "Messages held before publishing is refused."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 0.8,
+    "cpuFraction": 0.4,
+    "sigma": 0.5,
+    "writeMultiplier": 1,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 1024,
+    "concurrencySetting": "api_parallelism",
+    "backlogSetting": "max_messages"
+  }
+}

@@ -17,7 +17,11 @@ export type IconName =
   | "bolt"
   | "branch"
   | "book"
-  | "upload";
+  | "upload"
+  | "layers"
+  | "advisor"
+  | "menu"
+  | "close";
 
 const SHAPES: Record<IconName, ReactNode> = {
   logo: (
@@ -63,6 +67,12 @@ const SHAPES: Record<IconName, ReactNode> = {
     </>
   ),
   upload: <path d="M12 16V4M7 9l5-5 5 5M4 20h16" />,
+  advisor: (
+    <path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0012 3z" />
+  ),
+  menu: <path d="M4 6h16M4 12h16M4 18h16" />,
+  close: <path d="M6 6l12 12M18 6L6 18" />,
+  layers: <path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5M3 17.5l9 5 9-5" />,
   book: <path d="M4 5a2 2 0 012-2h13v15H6a2 2 0 00-2 2V5zM4 20a2 2 0 012-2h13v3H6a2 2 0 01-2-1z" />,
   branch: (
     <>

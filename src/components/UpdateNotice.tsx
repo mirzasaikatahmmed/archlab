@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type AvailableUpdate } from "../ipc";
+import { api, updateErrorText, type AvailableUpdate } from "../ipc";
 
 const AUTO_KEY = "archlab.autoUpdateCheck";
 
@@ -8,7 +8,7 @@ type State =
   | { kind: "checking" }
   | { kind: "current" }
   | { kind: "available"; update: AvailableUpdate }
-  | { kind: "installing"; version: string }
+  | { kind: "installing"; version: string; progress: number | null }
   | { kind: "installed"; version: string }
   | { kind: "failed"; message: string };
 
@@ -29,11 +29,29 @@ function saveAuto(on: boolean): void {
   }
 }
 
-/** Looks for a newer version on request, and at startup unless switched off. */
+/** Shows the version, looks for a newer one on request (and at startup unless switched off). */
 export function UpdateNotice() {
   const [state, setState] = useState<State>({ kind: "idle" });
   const [auto, setAuto] = useState(readAuto);
+  const [version, setVersion] = useState<string | null>(null);
   const started = useRef(false);
+
+  useEffect(() => {
+    let live = true;
+    api
+      .appInfo()
+      .then((info) => {
+        if (live) {
+          setVersion(info.version);
+        }
+      })
+      .catch(() => {
+        // The version line is a nicety; the update controls work without it.
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const settle = useCallback((pending: Promise<AvailableUpdate | null>, quiet: boolean) => {
     pending.then(
@@ -42,14 +60,7 @@ export function UpdateNotice() {
       },
       (err: unknown) => {
         // A failed startup check says nothing: the person did not ask for it.
-        setState(
-          quiet
-            ? { kind: "idle" }
-            : {
-                kind: "failed",
-                message: err instanceof Error ? err.message : "Could not check for updates.",
-              },
-        );
+        setState(quiet ? { kind: "idle" } : { kind: "failed", message: updateErrorText(err) });
       },
     );
   }, []);
@@ -65,23 +76,31 @@ export function UpdateNotice() {
   }, [auto, settle]);
 
   const install = async (update: AvailableUpdate) => {
-    setState({ kind: "installing", version: update.version });
+    setState({ kind: "installing", version: update.version, progress: null });
     try {
-      await update.install();
+      await update.install((progress) => {
+        setState({ kind: "installing", version: update.version, progress });
+      });
       setState({ kind: "installed", version: update.version });
     } catch (err) {
+      const detail = err instanceof Error ? err.message : typeof err === "string" ? err : "";
       setState({
         kind: "failed",
-        message: err instanceof Error ? err.message : "The update could not be installed.",
+        message: detail
+          ? `The update could not be installed: ${detail}`
+          : "The update could not be installed.",
       });
     }
   };
 
   return (
     <div className="update-notice">
+      {version && <p className="muted">ArchLab {version}</p>}
+      {state.kind === "checking" && <p role="status">Checking for updates…</p>}
       {state.kind === "available" && (
         <>
           <p role="status">Version {state.update.version} is available.</p>
+          {state.update.notes && <p className="muted update-notes">{state.update.notes}</p>}
           <button
             type="button"
             className="primary"
@@ -93,9 +112,27 @@ export function UpdateNotice() {
           </button>
         </>
       )}
-      {state.kind === "installing" && <p role="status">Installing {state.version}…</p>}
+      {state.kind === "installing" && (
+        <>
+          <p role="status">Installing {state.version}…</p>
+          {state.progress !== null && (
+            <progress max={1} value={state.progress} aria-label="Update download" />
+          )}
+        </>
+      )}
       {state.kind === "installed" && (
-        <p role="status">Version {state.version} is installed. Restart ArchLab to use it.</p>
+        <>
+          <p role="status">Version {state.version} is installed. Restart to use it.</p>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              void api.restartApp();
+            }}
+          >
+            Restart now
+          </button>
+        </>
       )}
       {state.kind === "current" && <p role="status">ArchLab is up to date.</p>}
       {state.kind === "failed" && <p role="alert">{state.message}</p>}

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "dynamodb",
+  "version": 1,
+  "name": "DynamoDB-style store",
+  "description": "Managed key-value store with single-digit-millisecond reads; throughput comes from provisioned capacity.",
+  "nodeKinds": ["database"],
+  "settings": [
+    {
+      "key": "parallel_requests",
+      "label": "Parallel requests",
+      "unit": "req",
+      "default": 256,
+      "min": 1,
+      "max": 100000,
+      "description": "Requests served at once (stands in for provisioned capacity)."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 1.2,
+    "cpuFraction": 0.4,
+    "sigma": 0.5,
+    "writeMultiplier": 1.6,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 1024,
+    "concurrencySetting": "parallel_requests"
+  }
+}

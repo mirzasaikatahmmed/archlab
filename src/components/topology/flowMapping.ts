@@ -22,6 +22,8 @@ export const NODE_KINDS: { kind: NodeKind; label: string }[] = [
   { kind: "apiGateway", label: "API gateway" },
   { kind: "cdn", label: "CDN" },
   { kind: "worker", label: "Worker" },
+  { kind: "objectStorage", label: "Object storage" },
+  { kind: "search", label: "Search" },
 ];
 
 export function kindLabel(kind: NodeKind): string {
