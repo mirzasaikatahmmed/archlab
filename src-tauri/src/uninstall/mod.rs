@@ -426,7 +426,7 @@ mod tests {
         assert_eq!(&args[..3], ["-c", "sleep 2; mv \"$1\" \"$2\"", "sh"]);
         assert!(!args[1].contains("rm -rf"), "the script has no path in it");
         assert_eq!(args[3], evil);
-        assert!(args[4].starts_with("/Users/me/.Trash/"));
+        assert!(Path::new(&args[4]).starts_with("/Users/me/.Trash"));
         assert!(
             helper_command(&Action::Package { name: "x".into() }, Path::new("/t"), 0).is_none()
         );
