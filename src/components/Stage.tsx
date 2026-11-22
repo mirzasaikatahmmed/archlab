@@ -92,10 +92,10 @@ export function Stage({ topology, latest, running, faults, active, highlight }: 
       return;
     }
     const observer = new ResizeObserver(() => {
-      setSize({ w: canvas.clientWidth, h: HEIGHT });
+      setSize({ w: canvas.clientWidth, h: canvas.clientHeight });
     });
     observer.observe(canvas);
-    setSize({ w: canvas.clientWidth, h: HEIGHT });
+    setSize({ w: canvas.clientWidth, h: canvas.clientHeight || HEIGHT });
     return () => {
       observer.disconnect();
     };
@@ -176,7 +176,6 @@ export function Stage({ topology, latest, running, faults, active, highlight }: 
     <figure className="stage">
       <canvas
         ref={canvasRef}
-        style={{ height: HEIGHT }}
         role="img"
         aria-label="Isometric view of the topology. Each node shows how full it is; moving dots show traffic flowing between nodes."
       />

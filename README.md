@@ -123,8 +123,9 @@ external dependencies for end users. **All simulation results are estimates.**
   AppImage or removes the package). Your projects are kept unless you tick the box to delete them.
   A development build or an unpacked copy is refused. See
   [ADR-017](docs/adr/ADR-017-updates-uninstall-responsive.md).
-- **Small screens:** below 900 px the sidebar becomes a menu, tabs scroll sideways and controls grow
-  on touch screens; the window can be as small as 360 x 480.
+- **Any screen size:** below 900 px the sidebar becomes a menu, tabs scroll sideways and controls grow
+  on touch screens (the window can be as small as 360 x 480); on wide screens the content grows, the
+  Stage follows the window height, and the live run puts steering and node load beside the Stage.
 
 ### Adding a template
 

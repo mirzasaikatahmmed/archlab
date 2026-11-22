@@ -154,95 +154,105 @@ export function LivePanel({ project }: Props) {
         {status === "stopped" && "Stopped."}
         {status === "failed" && "Failed."}
       </p>
-      <div role="group" aria-label="Live view" className="mode-switch">
-        <button
-          type="button"
-          aria-pressed={view === "stage"}
-          onClick={() => {
-            setView("stage");
-          }}
-        >
-          Stage
-        </button>
-        <button
-          type="button"
-          aria-pressed={view === "charts"}
-          onClick={() => {
-            setView("charts");
-          }}
-        >
-          Charts
-        </button>
-      </div>
-      {view === "stage" && (
-        <Stage
-          topology={project.topology}
-          latest={latest}
-          running={status === "running"}
-          faults={faults}
-          active={active}
-        />
-      )}
-      {active && (
-        <LiveControls
-          project={project}
-          activeFaultIds={latest?.activeFaults ?? []}
-          faults={faults}
-          controls={run.controls}
-          steer={run.steer}
-        />
-      )}
-      {latest && (
-        <>
-          <progress max={1} value={num(latest.progress)} aria-label="Run progress" />
-          {view === "charts" && (
-            <div className="charts">
-              <LineChart
-                title="Requests per second"
-                unit="req/s"
-                bands={bands}
-                series={[
-                  { label: "Offered", values: points.map((p) => num(p.offeredRps)) },
-                  { label: "Completed", values: points.map((p) => num(p.completedRps)) },
-                  { label: "Errors", values: points.map((p) => num(p.errorRps)) },
-                ]}
-              />
-              <LineChart
-                title="Latency p95"
-                unit="ms"
-                bands={bands}
-                series={[{ label: "p95", values: points.map((p) => num(p.p95Ms)) }]}
-              />
-            </div>
+      <div className="live-layout">
+        <div className="live-main">
+          <div role="group" aria-label="Live view" className="mode-switch">
+            <button
+              type="button"
+              aria-pressed={view === "stage"}
+              onClick={() => {
+                setView("stage");
+              }}
+            >
+              Stage
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === "charts"}
+              onClick={() => {
+                setView("charts");
+              }}
+            >
+              Charts
+            </button>
+          </div>
+          {view === "stage" && (
+            <Stage
+              topology={project.topology}
+              latest={latest}
+              running={status === "running"}
+              faults={faults}
+              active={active}
+            />
           )}
-          <ul className="node-live-list" aria-label="Live node load">
-            {latest.nodes.map((n) => (
-              <NodeBar key={n.id} node={n} label={names.get(n.id) ?? n.id} />
-            ))}
-          </ul>
-        </>
-      )}
-      {report && report.controls.length > 0 && (
-        <button
-          type="button"
-          onClick={() => {
-            void run.start(
-              { seed: report.seed, durationS: report.durationS, warmupS: report.warmupS },
-              speed,
-              false,
-              report.controls,
-            );
-          }}
-        >
-          <Icon name="play" />
-          Replay with the same changes
-        </button>
-      )}
-      <ExportBar
-        project={project}
-        report={report}
-        ticks={status === "finished" ? ticks : undefined}
-      />
+          {latest && (
+            <>
+              <progress max={1} value={num(latest.progress)} aria-label="Run progress" />
+              {view === "charts" && (
+                <div className="charts">
+                  <LineChart
+                    title="Requests per second"
+                    unit="req/s"
+                    bands={bands}
+                    series={[
+                      { label: "Offered", values: points.map((p) => num(p.offeredRps)) },
+                      { label: "Completed", values: points.map((p) => num(p.completedRps)) },
+                      { label: "Errors", values: points.map((p) => num(p.errorRps)) },
+                    ]}
+                  />
+                  <LineChart
+                    title="Latency p95"
+                    unit="ms"
+                    bands={bands}
+                    series={[{ label: "p95", values: points.map((p) => num(p.p95Ms)) }]}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        <div className="live-side">
+          {active && (
+            <LiveControls
+              project={project}
+              activeFaultIds={latest?.activeFaults ?? []}
+              faults={faults}
+              controls={run.controls}
+              steer={run.steer}
+            />
+          )}
+          {latest && (
+            <>
+              <ul className="node-live-list" aria-label="Live node load">
+                {latest.nodes.map((n) => (
+                  <NodeBar key={n.id} node={n} label={names.get(n.id) ?? n.id} />
+                ))}
+              </ul>
+            </>
+          )}
+          {report && report.controls.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                void run.start(
+                  { seed: report.seed, durationS: report.durationS, warmupS: report.warmupS },
+                  speed,
+                  false,
+                  report.controls,
+                );
+              }}
+            >
+              <Icon name="play" />
+              Replay with the same changes
+            </button>
+          )}
+          <ExportBar
+            project={project}
+            report={report}
+            ticks={status === "finished" ? ticks : undefined}
+          />
+        </div>
+      </div>
       {report && <ReportView report={report} />}
     </div>
   );

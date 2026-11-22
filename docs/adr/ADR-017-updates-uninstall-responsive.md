@@ -37,6 +37,10 @@ windows.
    over the content and it closes when something is chosen. The tab row scrolls sideways, mode
    switches wrap, paddings shrink, and touch devices get 40 px controls. The window's minimum size
    dropped from 960x600 to 360x480.
+   **Large screens** use the width too: content may grow to 96 rem (it stopped at 64 rem and left a
+   third of a 1920 px screen empty), the sidebar widens a little, the Stage's height follows the window
+   height (22 to 46 rem), and on screens 1200 px and wider the live run shows the Stage on the left with
+   steering, node load and export in a column on the right.
 
 ## Consequences
 

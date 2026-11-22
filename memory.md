@@ -19,7 +19,7 @@ Phases 1-10, live controls (ADR-013) and new node types (ADR-014) are on `main` 
 `mirzasaikatahmmed/archlab`, head `d54ee46`). GUI never run by hand (`pnpm tauri dev`); visuals checked only
 in headless Chrome with a mocked backend; real-mode timing only in Rust tests; sim-vs-real divergence not measured by
 the user. Release builds needed for meaningful calibration. Video needs a system ffmpeg (libvpx-vp9); not
-yet run end to end with a real ffmpeg (none installed here; encoder tested with a fake script). First release `v0.1.0` exists as a DRAFT on GitHub (ADR-012). Updates need a public repo. Local release build
+yet run end to end with a real ffmpeg (none installed here; encoder tested with a fake script). `v0.2.0` is PUBLISHED on GitHub (public repo; v0.1.0 is an unpublished draft); `latest.json` notes were edited by hand after the build (the workflow writes a placeholder). Local release build
 
 - 8 s launch OK on macOS. Scenario import/export deferred. Blueprints, the design advisor, object storage/search nodes and 10 more templates are on `feat/blueprints-advisor`, UNCOMMITTED. Next: try the app by hand, publish the draft, polish.
 
@@ -93,7 +93,8 @@ yet run end to end with a real ffmpeg (none installed here; encoder tested with 
   form submit (use `step="any"` + `noValidate`).
 - Uninstall (ADR-017): `src-tauri/src/uninstall/mod.rs`; pure `choose`/`describe` tested everywhere, only installed copies
   (mac /Applications bundle, Windows uninstall.exe, Linux AppImage or dpkg-owned) are acted on; dev builds refused. Windows/
-  Linux-package paths unrun. Responsive: <900px sidebar = menu (`data-nav` on `.shell`); `.tabs` needs `flex:none` or it
+  Linux-package paths unrun. Responsive: <900px sidebar = menu (`data-nav` on `.shell`); wide screens (>=1200px): `.live-layout` 2 columns, Stage height via CSS clamp (canvas reads clientHeight), `.page` max 96rem;
+  `.tabs` needs `flex:none` or it
   collapses when scrollable. Repo is PUBLIC since 2026-11-22; v0.1.0 is still a draft (updates need a published release).
 - sysinfo 0.40: `System::new()` and `Disks::new_with_refreshed_list()` return `Result`.
 

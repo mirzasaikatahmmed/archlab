@@ -236,7 +236,7 @@ button.danger:hover:not(:disabled) {
 
 .shell {
   display: grid;
-  grid-template-columns: 15rem minmax(0, 1fr);
+  grid-template-columns: clamp(15rem, 14vw, 19rem) minmax(0, 1fr);
   height: 100%;
 }
 
@@ -426,7 +426,7 @@ button.danger:hover:not(:disabled) {
   flex: 1;
   padding: 8px 28px 32px;
   width: 100%;
-  max-width: 64rem;
+  max-width: min(100%, 96rem);
 }
 
 .empty {
@@ -1067,6 +1067,7 @@ details ul {
 .stage canvas {
   display: block;
   width: 100%;
+  height: clamp(22rem, 52vh, 46rem);
 }
 
 .stage-legend {
@@ -1320,7 +1321,7 @@ details ul {
   flex-direction: column;
   gap: 18px;
   padding: 24px 28px 32px;
-  max-width: 72rem;
+  max-width: min(100%, 96rem);
 }
 
 .library-head h1,
@@ -1550,7 +1551,9 @@ details ul {
 }
 
 .control-row .field {
-  width: 8.5rem;
+  flex: 1 1 8.5rem;
+  min-width: 8rem;
+  max-width: 14rem;
 }
 
 .control-faults,
@@ -1801,5 +1804,42 @@ button.danger {
 
   .tab {
     height: 40px;
+  }
+}
+
+/* ---------- Wide screens ---------- */
+
+.live-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.live-main,
+.live-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+@media (min-width: 1200px) {
+  .live-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(21rem, 26vw, 28rem);
+    align-items: start;
+    gap: 20px;
+  }
+
+  .live-side .node-live {
+    grid-template-columns: minmax(0, 1fr) 6rem;
+    gap: 4px 12px;
+    padding: 8px 12px;
+  }
+
+  .live-side .node-live > span:last-child {
+    grid-column: 1 / -1;
+    color: var(--muted);
+    font-size: 12px;
   }
 }
