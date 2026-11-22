@@ -1,6 +1,6 @@
 [package]
 name = "archlab"
-version = "0.1.0"
+version = "0.2.0"
 description = "Capacity planning and distributed-system simulation"
 authors = ["ArchLab contributors"]
 license = "UNLICENSED"
