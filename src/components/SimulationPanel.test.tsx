@@ -69,6 +69,7 @@ const report: SimReport = {
   },
   timeline: [],
   faults: [],
+  controls: [],
   assumptions: ["Open-loop traffic."],
 };
 

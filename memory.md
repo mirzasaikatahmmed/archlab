@@ -15,8 +15,7 @@ rusqlite_migration, `ProjectRepository`), runtime/detect (sysinfo), sim/ (model 
 
 ## Current state
 
-Phases 1-9 are on `main` (pushed to private GitHub repo `mirzasaikatahmmed/archlab`). Phase 10
-(packaging/updates) is implemented on `feat/phase-10-packaging`, UNCOMMITTED. GUI never run by hand (`pnpm tauri dev`); visuals checked only
+Phases 1-10 are on `main`; live controls (ADR-013) are on `feat/live-controls`, UNCOMMITTED (pushed to private GitHub repo `mirzasaikatahmmed/archlab`, head `dffc04f`). GUI never run by hand (`pnpm tauri dev`); visuals checked only
 in headless Chrome with a mocked backend; real-mode timing only in Rust tests; sim-vs-real divergence not measured by
 the user. Release builds needed for meaningful calibration. Video needs a system ffmpeg (libvpx-vp9); not
 yet run end to end with a real ffmpeg (none installed here; encoder tested with a fake script). Release workflow (tag `v*` -> draft release)
@@ -73,8 +72,13 @@ Scenario import/export deferred. Next: first tag/draft release, then polish.
   2.12). Update key at `~/.tauri/archlab-updater.key` (NOT in repo; secret `TAURI_SIGNING_PRIVATE_KEY`). Sidecar
   `archlab-ffmpeg` (Win/Linux only, LGPL, pinned in scripts/ffmpeg-manifest.json); macOS uses brew ffmpeg.
   `createUpdaterArtifacts`/`externalBin` live only in `tauri.release.conf.json`/`tauri.ffmpeg.conf.json` overlays.
+- GitHub Actions are DISABLED on the repo by the user (2026-11-22), so CI and the release workflow do not run; re-enable
+  in repo Settings > Actions before relying on them. Phase 10 (`dffc04f`) is merged and pushed to `main`.
 - `.gitattributes` forces LF: without it the Windows CI job failed `format:check` (CRLF checkout). First CI run on `main`:
   macOS green, Windows stopped at format (rest unverified), Linux build step cancelled (unknown): re-run to confirm.
+- Live controls (ADR-013): `sim/control.rs` (ControlCommand/ControlRecord), `Simulation::apply_control`, `LiveRuns::control`
+  waits for the run's reply; `SimReport.controls` logs them; `start_live_run(.., script, ..)` replays; `LiveEvent::Finished`
+  boxes the report (clippy size lint). UI: `LiveControls`, `lib/liveFaults.ts`.
 - sysinfo 0.40: `System::new()` and `Disks::new_with_refreshed_list()` return `Result`.
 
 ## Setup and run

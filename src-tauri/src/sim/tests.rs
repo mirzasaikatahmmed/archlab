@@ -505,3 +505,201 @@ mod chaos {
         ));
     }
 }
+
+mod controls {
+    use super::*;
+    use crate::domain::chaos::FaultKind;
+    use crate::sim::control::{ControlCommand, ControlRecord};
+    use crate::sim::engine::{Simulation, run_scripted};
+    use crate::sim::model::Model;
+    use crate::sim::report::SimReport;
+
+    fn steady() -> Project {
+        let mut p = project(client_app(), 40.0, 1.0);
+        p.server_profile.cpu_cores = 4;
+        p
+    }
+
+    fn at(t_s: u32, command: ControlCommand) -> ControlRecord {
+        ControlRecord {
+            t_s,
+            command,
+            summary: String::new(),
+            fault_id: None,
+        }
+    }
+
+    fn traffic(multiplier: f64) -> ControlCommand {
+        ControlCommand::SetTraffic { multiplier }
+    }
+
+    fn crash(target: &str, duration_s: f64) -> ControlCommand {
+        ControlCommand::InjectFault {
+            target: target.to_owned(),
+            fault: FaultKind::Crash,
+            duration_s,
+        }
+    }
+
+    fn scripted(p: &Project, seed: u32, duration_s: f64, script: &[ControlRecord]) -> SimReport {
+        let model = Model::compile(p).expect("model");
+        run_scripted(&model, &options(seed, duration_s), script).expect("run")
+    }
+
+    fn offered(report: &SimReport, from: usize, to: usize) -> f64 {
+        report.timeline[from..to]
+            .iter()
+            .map(|p| p.offered_rps)
+            .sum::<f64>()
+            / (to - from) as f64
+    }
+
+    #[test]
+    fn a_neutral_command_changes_nothing_but_the_log() {
+        let p = steady();
+        let plain = run(&p, &options(4, 30.0)).expect("run");
+        let with = scripted(&p, 4, 30.0, &[at(10, traffic(1.0))]);
+        assert_eq!(with.controls.len(), 1);
+        assert_eq!(with.summary, plain.summary);
+        assert_eq!(with.nodes, plain.nodes);
+        assert_eq!(with.timeline, plain.timeline);
+    }
+
+    #[test]
+    fn a_traffic_multiplier_scales_the_offered_rate_from_that_second() {
+        let p = steady();
+        let report = scripted(&p, 4, 40.0, &[at(15, traffic(3.0)), at(30, traffic(0.5))]);
+        let before = offered(&report, 5, 15);
+        let tripled = offered(&report, 17, 30);
+        let halved = offered(&report, 32, 40);
+        assert!(
+            (tripled / before - 3.0).abs() < 0.4,
+            "{before} -> {tripled}"
+        );
+        assert!((halved / before - 0.5).abs() < 0.15, "{before} -> {halved}");
+        assert_eq!(report.controls[0].summary, "Traffic \u{d7}3");
+    }
+
+    #[test]
+    fn an_injected_crash_is_logged_loses_requests_and_ends_on_time() {
+        let p = steady();
+        let report = scripted(&p, 4, 40.0, &[at(10, crash("app", 8.0))]);
+        let record = &report.controls[0];
+        assert_eq!(record.t_s, 10);
+        assert_eq!(record.fault_id.as_deref(), Some("live-1"));
+        assert_eq!(record.summary, "Crash of app (live)");
+        let impact = report
+            .faults
+            .iter()
+            .find(|f| f.fault_id == "live-1")
+            .expect("impact");
+        assert!((impact.start_s - 10.0).abs() < 1e-9 && (impact.end_s - 18.0).abs() < 1e-9);
+        assert!(impact.during.error_rate > 0.9, "{impact:?}");
+        assert!(impact.after.error_rate < 0.05, "{impact:?}");
+        assert!(report.nodes[0].faulted > 0);
+    }
+
+    #[test]
+    fn a_fault_can_be_ended_early_and_the_report_shows_when() {
+        let p = steady();
+        let report = scripted(
+            &p,
+            4,
+            40.0,
+            &[
+                at(10, crash("app", 30.0)),
+                at(
+                    14,
+                    ControlCommand::EndFault {
+                        fault_id: "live-1".to_owned(),
+                    },
+                ),
+            ],
+        );
+        let impact = &report.faults[0];
+        assert!((impact.end_s - 14.0).abs() < 1e-9, "{impact:?}");
+        assert!(report.timeline[20..40].iter().all(|p| p.error_rps < 1.0));
+    }
+
+    #[test]
+    fn a_project_fault_can_be_ended_early_too() {
+        use crate::domain::chaos::Fault;
+        let mut p = steady();
+        p.chaos.faults.push(Fault {
+            id: "f1".to_owned(),
+            target: "app".to_owned(),
+            kind: FaultKind::Crash,
+            start_s: 5.0,
+            duration_s: 30.0,
+        });
+        let report = scripted(
+            &p,
+            4,
+            40.0,
+            &[at(
+                9,
+                ControlCommand::EndFault {
+                    fault_id: "f1".to_owned(),
+                },
+            )],
+        );
+        assert!((report.faults[0].end_s - 9.0).abs() < 1e-9);
+        assert!(report.timeline[12..40].iter().all(|p| p.error_rps < 1.0));
+    }
+
+    #[test]
+    fn bad_commands_are_refused_and_leave_the_run_alone() {
+        let p = steady();
+        let model = Model::compile(&p).expect("model");
+        let mut sim = Simulation::new(&model, &options(4, 20.0));
+        sim.step_until(5_000_000).expect("step");
+        let refused = [
+            traffic(0.0),
+            traffic(50.0),
+            traffic(f64::NAN),
+            crash("c", 5.0),
+            crash("nowhere", 5.0),
+            crash("app", 0.0),
+            ControlCommand::InjectFault {
+                target: "app".to_owned(),
+                fault: FaultKind::Slowdown { factor: 500.0 },
+                duration_s: 5.0,
+            },
+            ControlCommand::InjectFault {
+                target: "app".to_owned(),
+                fault: FaultKind::EdgeLoss { loss: 0.5 },
+                duration_s: 5.0,
+            },
+            ControlCommand::EndFault {
+                fault_id: "live-9".to_owned(),
+            },
+        ];
+        for command in &refused {
+            assert!(sim.apply_control(command).is_err(), "{command:?}");
+        }
+        sim.step_until(20_000_000).expect("step");
+        let plain = run(&p, &options(4, 20.0)).expect("run");
+        let report = sim.finish();
+        assert!(report.controls.is_empty());
+        assert_eq!(report.summary, plain.summary);
+    }
+
+    #[test]
+    fn the_logged_commands_reproduce_a_run_exactly() {
+        let p = steady();
+        let first = scripted(
+            &p,
+            9,
+            40.0,
+            &[
+                at(8, traffic(2.5)),
+                at(12, crash("app", 6.0)),
+                at(25, traffic(1.0)),
+            ],
+        );
+        let again = scripted(&p, 9, 40.0, &first.controls);
+        assert_eq!(first, again);
+        let different = scripted(&p, 9, 40.0, &[at(8, traffic(2.5))]);
+        assert_ne!(first.summary, different.summary);
+    }
+}

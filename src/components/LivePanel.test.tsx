@@ -1,7 +1,14 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { LiveEvent, LiveNodeTick, LiveTick, Project, SimReport } from "../bindings";
+import type {
+  ControlRecord,
+  LiveEvent,
+  LiveNodeTick,
+  LiveTick,
+  Project,
+  SimReport,
+} from "../bindings";
 import { chaosPlan, serverProfile, topology, trafficProfile, whatIfPlan } from "../test/fixtures";
 
 const startLiveRun = vi.hoisted(() => vi.fn());
@@ -63,6 +70,7 @@ const report: SimReport = {
   bottleneck: null,
   timeline: [],
   faults: [],
+  controls: [],
   assumptions: [],
 };
 
@@ -95,6 +103,7 @@ describe("LivePanel", () => {
       { seed: 1, durationS: 60, warmupS: 5 },
       5,
       expect.any(Function),
+      [],
     );
     act(() => {
       onEvent({ kind: "tick", tick: tick(0) });
@@ -173,5 +182,109 @@ describe("LivePanel", () => {
     await screen.findByRole("button", { name: "Stop" });
     unmount();
     expect(controlLiveRun).toHaveBeenCalledWith({ kind: "stop" });
+  });
+
+  describe("steering", () => {
+    const record = (summary: string, command: ControlRecord["command"], tS = 3): ControlRecord => ({
+      tS,
+      command,
+      summary,
+      faultId: null,
+    });
+
+    it("shows the controls only while a run is going", async () => {
+      expect(screen.queryByRole("region", { name: "Steer the run" })).not.toBeInTheDocument();
+      const onEvent = await startRun();
+      expect(screen.getByRole("region", { name: "Steer the run" })).toBeInTheDocument();
+      act(() => {
+        onEvent({ kind: "finished", report });
+      });
+      await waitFor(() => {
+        expect(screen.queryByRole("region", { name: "Steer the run" })).not.toBeInTheDocument();
+      });
+    });
+
+    it("changes the traffic and logs what was applied", async () => {
+      controlLiveRun.mockResolvedValue(record("Traffic ×2", { kind: "setTraffic", multiplier: 2 }));
+      await startRun();
+      await userEvent.click(screen.getByRole("button", { name: "Traffic ×2" }));
+      expect(controlLiveRun).toHaveBeenLastCalledWith({
+        kind: "control",
+        command: { kind: "setTraffic", multiplier: 2 },
+      });
+      expect(await screen.findByText("at 3 s: Traffic ×2")).toBeInTheDocument();
+      expect(screen.getByText("Now ×2")).toBeInTheDocument();
+    });
+
+    it("injects a fault on a server node and can end it early", async () => {
+      const onEvent = await startRun();
+      controlLiveRun.mockResolvedValue({
+        ...record("Slowdown of App (live)", {
+          kind: "injectFault",
+          target: "app",
+          fault: { kind: "slowdown", factor: 5 },
+          durationS: 20,
+        }),
+        faultId: "live-1",
+      });
+      await userEvent.selectOptions(screen.getByLabelText("Fault"), "slowdown");
+      await userEvent.click(screen.getByRole("button", { name: "Inject fault" }));
+      expect(controlLiveRun).toHaveBeenLastCalledWith({
+        kind: "control",
+        command: {
+          kind: "injectFault",
+          target: "app",
+          fault: { kind: "slowdown", factor: 5 },
+          durationS: 20,
+        },
+      });
+      act(() => {
+        onEvent({ kind: "tick", tick: { ...tick(3), activeFaults: ["live-1"] } });
+      });
+      controlLiveRun.mockResolvedValue(
+        record("Ended: Slowdown", { kind: "endFault", faultId: "live-1" }, 5),
+      );
+      await userEvent.click(await screen.findByRole("button", { name: /End Slowdown on .* now/ }));
+      expect(controlLiveRun).toHaveBeenLastCalledWith({
+        kind: "control",
+        command: { kind: "endFault", faultId: "live-1" },
+      });
+    });
+
+    it("only offers server nodes as fault targets", async () => {
+      await startRun();
+      const options = within(screen.getByLabelText("Node")).getAllByRole("option");
+      expect(options.map((o) => o.textContent)).not.toContain("Clients");
+      expect(options.length).toBeGreaterThan(0);
+    });
+
+    it("shows why a change was refused and keeps the run going", async () => {
+      await startRun();
+      controlLiveRun.mockRejectedValueOnce(
+        new CommandError({
+          kind: "validation",
+          issues: [{ field: "multiplier", message: "must be between 0.1 and 10" }],
+        }),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Set traffic" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("must be between 0.1 and 10");
+      expect(screen.getByText("Running…")).toBeInTheDocument();
+    });
+
+    it("replays a steered run with the logged changes", async () => {
+      const onEvent = await startRun();
+      const steered = record("Traffic ×3", { kind: "setTraffic", multiplier: 3 }, 4);
+      act(() => {
+        onEvent({ kind: "finished", report: { ...report, controls: [steered] } });
+      });
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Replay with the same changes" }),
+      );
+      await waitFor(() => {
+        expect(startLiveRun).toHaveBeenCalledTimes(2);
+      });
+      expect(startLiveRun.mock.calls[1]?.[4]).toEqual([steered]);
+      expect(startLiveRun.mock.calls[1]?.[1]).toEqual({ seed: 1, durationS: 10, warmupS: 5 });
+    });
   });
 });

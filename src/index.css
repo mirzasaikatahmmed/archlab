@@ -1496,3 +1496,57 @@ details ul {
   gap: 6px;
   color: var(--muted);
 }
+
+.update-notice .check input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  flex: none;
+}
+
+/* ---------- Live controls ---------- */
+
+.live-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.live-controls h3,
+.live-controls p {
+  margin: 0;
+}
+
+.control-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.control-row .field {
+  width: 8.5rem;
+}
+
+.control-faults,
+.control-log {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.9rem;
+}
+
+.control-faults {
+  list-style: none;
+  padding-left: 0;
+}
+
+.control-faults li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}

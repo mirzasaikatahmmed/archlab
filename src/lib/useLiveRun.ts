@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { LiveEvent, LiveTick, Project, SimOptions, SimReport } from "../bindings";
+import type {
+  ControlCommand,
+  ControlRecord,
+  LiveEvent,
+  LiveTick,
+  Project,
+  SimOptions,
+  SimReport,
+} from "../bindings";
 import { CommandError, api, describeError } from "../ipc";
 
 export type LiveStatus = "idle" | "running" | "paused" | "finished" | "stopped" | "failed";
@@ -32,6 +40,8 @@ export function useLiveRun(project: Project) {
   const [ticks, setTicks] = useState<LiveTick[]>([]);
   const [report, setReport] = useState<SimReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Steering commands of this run: the replayed script, then whatever was applied since. */
+  const [controls, setControls] = useState<ControlRecord[]>([]);
   const buffer = useRef<LiveEvent[]>([]);
   const active = status === "running" || status === "paused";
   const activeRef = useRef(active);
@@ -96,17 +106,29 @@ export function useLiveRun(project: Project) {
   };
 
   /** Starts a run. With `waitForFree`, a run that is still shutting down is waited for. */
-  const start = async (options: SimOptions, speed: number | null, waitForFree = false) => {
+  const start = async (
+    options: SimOptions,
+    speed: number | null,
+    waitForFree = false,
+    script: ControlRecord[] = [],
+  ) => {
     setError(null);
     setReport(null);
     setTicks([]);
+    setControls(script);
     buffer.current = [];
     const attempts = waitForFree ? BUSY_RETRIES : 1;
     for (let attempt = 1; ; attempt++) {
       try {
-        await api.startLiveRun(project, options, speed, (event) => {
-          buffer.current.push(event);
-        });
+        await api.startLiveRun(
+          project,
+          options,
+          speed,
+          (event) => {
+            buffer.current.push(event);
+          },
+          script,
+        );
         setStatus("running");
         return;
       } catch (err) {
@@ -133,6 +155,20 @@ export function useLiveRun(project: Project) {
     }
   };
 
+  /** Changes the simulated system now. Returns the log entry, or null if it was refused. */
+  const steer = async (command: ControlCommand): Promise<ControlRecord | null> => {
+    try {
+      const record = await api.controlLiveRun({ kind: "control", command });
+      if (record) {
+        setControls((prev) => [...prev, record]);
+      }
+      return record;
+    } catch (err) {
+      showError(err);
+      return null;
+    }
+  };
+
   const pause = async () => {
     await control({ kind: "pause" });
     setStatus("paused");
@@ -149,7 +185,9 @@ export function useLiveRun(project: Project) {
     ticks,
     report,
     error,
+    controls,
     start,
+    steer,
     pause,
     resume,
     stop: () => control({ kind: "stop" }),

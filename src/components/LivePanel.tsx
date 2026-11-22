@@ -4,9 +4,11 @@ import { last } from "../lib/numbers";
 import { levelFor } from "../lib/severity";
 import { useLiveRun } from "../lib/useLiveRun";
 import { FAULT_LABELS } from "../schemas/chaos";
+import { liveFaultsFrom } from "../lib/liveFaults";
 import { ExportBar } from "./ExportBar";
 import { Icon } from "./Icon";
 import { LineChart, type Band } from "./LineChart";
+import { LiveControls } from "./LiveControls";
 import { ReportView, UtilBar, pct } from "./ReportView";
 import { Stage } from "./Stage";
 
@@ -49,7 +51,8 @@ export function LivePanel({ project }: Props) {
   const latest = last(ticks);
   const names = new Map(project.topology.nodes.map((n) => [n.id, n.label]));
   const points = ticks.map((t) => t.point);
-  const bands: Band[] = project.chaos.faults.map((f) => ({
+  const faults = [...project.chaos.faults, ...liveFaultsFrom(run.controls)];
+  const bands: Band[] = faults.map((f) => ({
     from: num(f.startS),
     to: num(f.startS) + num(f.durationS),
     label: FAULT_LABELS[f.kind.kind],
@@ -176,8 +179,17 @@ export function LivePanel({ project }: Props) {
           topology={project.topology}
           latest={latest}
           running={status === "running"}
-          faults={project.chaos.faults}
+          faults={faults}
           active={active}
+        />
+      )}
+      {active && (
+        <LiveControls
+          project={project}
+          activeFaultIds={latest?.activeFaults ?? []}
+          faults={faults}
+          controls={run.controls}
+          steer={run.steer}
         />
       )}
       {latest && (
@@ -209,6 +221,22 @@ export function LivePanel({ project }: Props) {
             ))}
           </ul>
         </>
+      )}
+      {report && report.controls.length > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            void run.start(
+              { seed: report.seed, durationS: report.durationS, warmupS: report.warmupS },
+              speed,
+              false,
+              report.controls,
+            );
+          }}
+        >
+          <Icon name="play" />
+          Replay with the same changes
+        </button>
       )}
       <ExportBar
         project={project}

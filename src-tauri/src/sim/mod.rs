@@ -3,6 +3,7 @@
 //! `run` turns a project into a [`SimReport`]. The same project and options
 //! always produce the same report, on every platform.
 
+pub mod control;
 pub(crate) mod engine;
 pub mod live;
 pub(crate) mod model;

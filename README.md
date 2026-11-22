@@ -89,6 +89,10 @@ external dependencies for end users. **All simulation results are estimates.**
   second at 1x, 5x, 20x or max speed, with start/pause/resume/stop, throughput and p95 charts,
   and per-node utilization, queue and drops. A finished live run produces the same report as an
   instant run with the same seed. See [ADR-005](docs/adr/ADR-005-live-runs.md).
+- **Steer a live run** ("Steer the run" panel): change the traffic (×0.1 to ×10), inject a crash,
+  slowdown or lost workers on a server node, or end a fault early, while the run plays. Changes
+  apply at the current simulated second and are logged in the report; "Replay with the same
+  changes" reproduces the run exactly. See [ADR-013](docs/adr/ADR-013-live-controls.md).
 
 - **Export** (Simulate tab, below the run controls): save the project as an `.archlab.json` file,
   the result as a Markdown report, the topology as an SVG diagram (coloured by status after a
@@ -177,4 +181,4 @@ Rule: no business logic in the UI; commands only delegate to the Rust modules.
 
 ## Documentation
 
-- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode, ADR-009 what-if, ADR-010 scenarios, ADR-011 export, ADR-012 packaging and updates
+- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode, ADR-009 what-if, ADR-010 scenarios, ADR-011 export, ADR-012 packaging and updates, ADR-013 live controls

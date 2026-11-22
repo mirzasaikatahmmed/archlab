@@ -250,6 +250,17 @@ fn results(out: &mut String, project: &Project, r: &SimReport) {
         }
     }
 
+    if !r.controls.is_empty() {
+        let _ = writeln!(out, "\n### Live controls\n");
+        let _ = writeln!(
+            out,
+            "This run was steered while it played. Replaying these commands reproduces it.\n"
+        );
+        for c in &r.controls {
+            let _ = writeln!(out, "- at {} s: {}", c.t_s, c.summary);
+        }
+    }
+
     if !r.assumptions.is_empty() {
         let _ = writeln!(out, "\n### Assumptions\n");
         for a in &r.assumptions {
@@ -298,6 +309,28 @@ mod tests {
                 assert!(text.contains(&n.label), "missing {}", n.label);
             }
         }
+    }
+
+    #[test]
+    fn live_controls_are_listed_with_their_time() {
+        use crate::sim::control::{ControlCommand, ControlRecord};
+        let p = project();
+        let opts = SimOptions {
+            seed: 1,
+            duration_s: 10.0,
+            warmup_s: 2.0,
+        };
+        let mut report = run(&p, &opts).expect("run");
+        assert!(!render(&p, Some(&report)).contains("Live controls"));
+        report.controls.push(ControlRecord {
+            t_s: 4,
+            command: ControlCommand::SetTraffic { multiplier: 3.0 },
+            summary: "Traffic \u{d7}3".to_owned(),
+            fault_id: None,
+        });
+        let text = render(&p, Some(&report));
+        assert!(text.contains("### Live controls"));
+        assert!(text.contains("- at 4 s: Traffic \u{d7}3"));
     }
 
     #[test]

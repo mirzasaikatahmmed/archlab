@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use super::control::ControlRecord;
 use crate::domain::topology::NodeKind;
 use crate::domain::validation::{Issues, ValidationError};
 
@@ -171,6 +172,8 @@ pub struct SimReport {
     pub bottleneck: Option<Bottleneck>,
     pub timeline: Vec<TimelinePoint>,
     pub faults: Vec<FaultImpact>,
+    /// Commands applied during a live run, in order; empty for a run nobody steered.
+    pub controls: Vec<ControlRecord>,
     /// Modelling assumptions that affected this run.
     pub assumptions: Vec<String>,
 }

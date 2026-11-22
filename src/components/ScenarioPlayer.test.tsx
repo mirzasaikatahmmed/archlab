@@ -74,6 +74,7 @@ const report = {
   bottleneck: null,
   timeline: [],
   faults: [],
+  controls: [],
   assumptions: [],
 } as SimReport;
 

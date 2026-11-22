@@ -77,6 +77,26 @@ impl FaultKind {
     pub fn targets_edge(&self) -> bool {
         matches!(self, Self::EdgeLatency { .. } | Self::EdgeLoss { .. })
     }
+
+    /// Checks the severity of the fault against its allowed range.
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        let mut issues = Issues::default();
+        check_severity(&mut issues, "fault", self);
+        issues.finish()
+    }
+
+    /// A short description of the fault at `place`, such as "Crash of App server".
+    pub fn describe_at(&self, place: &str) -> String {
+        match self {
+            Self::Crash => format!("Crash of {place}"),
+            Self::Slowdown { factor } => format!("{factor}\u{d7} slowdown of {place}"),
+            Self::LostWorkers { fraction } => {
+                format!("{:.0}% of workers lost on {place}", fraction * 100.0)
+            }
+            Self::EdgeLatency { extra_ms } => format!("+{extra_ms} ms latency on {place}"),
+            Self::EdgeLoss { loss } => format!("{:.0}% packet loss on {place}", loss * 100.0),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
@@ -116,17 +136,7 @@ impl Fault {
         } else {
             label(&self.target)
         };
-        match &self.kind {
-            FaultKind::Crash => format!("Crash of {place}"),
-            FaultKind::Slowdown { factor } => format!("{factor}\u{d7} slowdown of {place}"),
-            FaultKind::LostWorkers { fraction } => {
-                format!("{:.0}% of workers lost on {place}", fraction * 100.0)
-            }
-            FaultKind::EdgeLatency { extra_ms } => format!("+{extra_ms} ms latency on {place}"),
-            FaultKind::EdgeLoss { loss } => {
-                format!("{:.0}% packet loss on {place}", loss * 100.0)
-            }
-        }
+        self.kind.describe_at(&place)
     }
 }
 

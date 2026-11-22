@@ -178,6 +178,21 @@ export function ReportView({ report }: { report: SimReport }) {
         </table>
       </div>
       {report.faults.length > 0 && <FaultImpactTable faults={report.faults} />}
+      {report.controls.length > 0 && (
+        <section aria-label="Live controls">
+          <h3>Live controls</h3>
+          <p className="muted">
+            This run was steered while it played. Replaying these changes reproduces it.
+          </p>
+          <ul>
+            {report.controls.map((c, i) => (
+              <li key={`${String(c.tS)}-${String(i)}`}>
+                at {c.tS} s: {c.summary}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <p className="muted">{report.notice}</p>
       <details>
         <summary>Modelling assumptions</summary>

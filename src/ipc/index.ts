@@ -5,8 +5,10 @@ import {
   type AppError,
   type AppInfo,
   type Calibration,
+  type ControlRecord,
   type CalibrationEvent,
   type ConfigTemplate,
+  type ControlCommand,
   type ExportKind,
   type DetectedProfile,
   type FieldIssue,
@@ -26,6 +28,8 @@ import {
 
 export type {
   AppError,
+  ControlCommand,
+  ControlRecord,
   ExportKind,
   FieldIssue,
   LiveCommand,
@@ -102,12 +106,16 @@ export const api = {
     options: SimOptions,
     speed: number | null,
     onEvent: (event: LiveEvent) => void,
+    /** Logged commands to re-apply at their seconds, to replay a steered run. */
+    script: ControlRecord[] = [],
   ): Promise<void> => {
     const channel = new Channel<LiveEvent>();
     channel.onmessage = onEvent;
-    await unwrap(commands.startLiveRun(project, options, speed, channel));
+    await unwrap(commands.startLiveRun(project, options, speed, script, channel));
   },
-  controlLiveRun: (command: LiveCommand): Promise<null> => unwrap(commands.controlLiveRun(command)),
+  /** Pause, resume, stop, change speed or steer; a steering command returns its log entry. */
+  controlLiveRun: (command: LiveCommand): Promise<ControlRecord | null> =>
+    unwrap(commands.controlLiveRun(command)),
   /** Starts the machine benchmarks; `onEvent` reports each step and the result. */
   startCalibration: async (onEvent: (event: CalibrationEvent) => void): Promise<void> => {
     const channel = new Channel<CalibrationEvent>();

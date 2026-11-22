@@ -17,10 +17,15 @@ export const commands = {
 	runSimulation: (project: Project, options: SimOptions, _options?: InvokeOptions) => typedError<SimReport, AppError>(__TAURI_INVOKE("run_simulation", { project, options }, _options)),
 	/**
 	 *  Starts a live run that streams one tick per simulated second through `on_event`.
-	 *  `speed` is simulated seconds per real second; `None` runs as fast as possible.
+	 *  `speed` is simulated seconds per real second; `None` runs as fast as possible. `script` is a list
+	 *  of logged commands to re-apply at their seconds (empty for a normal run).
 	 */
-	startLiveRun: (project: Project, options: SimOptions, speed: number | null, onEvent: Channel<LiveEvent>, _options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("start_live_run", { project, options, speed, onEvent }, _options)),
-	controlLiveRun: (command: LiveCommand, options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("control_live_run", { command }, options)),
+	startLiveRun: (project: Project, options: SimOptions, speed: number | null, script: ControlRecord[], onEvent: Channel<LiveEvent>, _options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("start_live_run", { project, options, speed, script, onEvent }, _options)),
+	/**
+	 *  Pauses, resumes, stops or steers the live run. Returns the log entry for a steering command.
+	 *  Async because a steering command waits for the run to apply it.
+	 */
+	controlLiveRun: (command: LiveCommand, options?: InvokeOptions) => typedError<ControlRecord | null, AppError>(__TAURI_INVOKE("control_live_run", { command }, options)),
 	/**  Benchmarks this machine in the background, reporting each step through `on_event`. */
 	startCalibration: (onEvent: Channel<CalibrationEvent>, options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("start_calibration", { onEvent }, options)),
 	cancelCalibration: (options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("cancel_calibration", undefined, options)),
@@ -163,6 +168,25 @@ export type ConfigTemplate = {
 	sim?: SimParams | null,
 };
 
+export type ControlCommand = 
+/**  Multiplies the traffic profile's rate (spikes included) from now on. */
+{ kind: "setTraffic"; multiplier: number | null } | 
+/**  Starts a fault on a server node now. Only node faults can be injected live. */
+{ kind: "injectFault"; target: string; fault: FaultKind; durationS: number | null } | 
+/**  Ends a fault that is in effect, whether it came from the project or was injected. */
+{ kind: "endFault"; faultId: string };
+
+/**  One applied command, as logged in the report. */
+export type ControlRecord = {
+	/**  Whole simulated second at which it took effect. */
+	tS: number,
+	command: ControlCommand,
+	/**  Plain-language description, such as "Traffic ×3". */
+	summary: string,
+	/**  The fault it started (`live-1`, `live-2`, ...) or ended. */
+	faultId: string | null,
+};
+
 /**  One metric measured both ways. */
 export type Delta = {
 	metric: string,
@@ -250,7 +274,9 @@ export type Level = "beginner" | "intermediate";
 
 export type LiveCommand = { kind: "pause" } | { kind: "resume" } | { kind: "stop" } | 
 /**  Simulated seconds per wall-clock second; `None` runs as fast as possible. */
-{ kind: "setSpeed"; speed: number | null };
+{ kind: "setSpeed"; speed: number | null } | 
+/**  Changes the simulated system while it runs; see [`ControlCommand`]. */
+{ kind: "control"; command: ControlCommand };
 
 export type LiveEvent = { kind: "tick"; tick: LiveTick } | 
 /**  The run reached its end; the report covers the whole run. */
@@ -473,6 +499,8 @@ export type SimReport = {
 	bottleneck: Bottleneck | null,
 	timeline: TimelinePoint[],
 	faults: FaultImpact[],
+	/**  Commands applied during a live run, in order; empty for a run nobody steered. */
+	controls: ControlRecord[],
 	/**  Modelling assumptions that affected this run. */
 	assumptions: string[],
 };

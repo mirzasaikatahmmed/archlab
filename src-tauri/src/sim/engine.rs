@@ -5,7 +5,8 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, VecDeque};
 
 use super::SimError;
-use super::model::{FaultTarget, Model, ms_to_us};
+use super::control::{ControlCommand, ControlRecord};
+use super::model::{CompiledFault, FaultTarget, Model, ms_to_us};
 use super::report::{
     Bottleneck, ESTIMATE_NOTICE, FaultImpact, Latency, LiveNodeTick, LiveTick, NodeReport,
     Severity, SimOptions, SimReport, Summary, TimelinePoint, WindowStats, severity_for,
@@ -13,6 +14,7 @@ use super::report::{
 use super::rng::Stream;
 use crate::domain::chaos::FaultKind;
 use crate::domain::topology::NodeKind;
+use crate::domain::validation::Issues;
 
 /// Hard stop so a runaway scenario cannot freeze the app.
 pub const MAX_EVENTS: u64 = 5_000_000;
@@ -144,7 +146,13 @@ pub struct Simulation<'a> {
     reqs: Vec<Request>,
     states: Vec<NodeState>,
     edges: Vec<EdgeState>,
+    /// The project's faults, then any injected live.
+    faults: Vec<CompiledFault>,
     active: Vec<bool>,
+    /// Live traffic multiplier, and the largest one seen (it scales the thinning's peak rate).
+    live_mult: f64,
+    live_peak: f64,
+    controls: Vec<ControlRecord>,
     arrivals: Stream,
     attrs: Stream,
     fault_rng: Stream,
@@ -157,6 +165,36 @@ pub struct Simulation<'a> {
     retries: u32,
     latencies: Vec<u32>,
     buckets: Vec<Bucket>,
+}
+
+fn invalid(field: &str, message: &str) -> SimError {
+    let mut issues = Issues::default();
+    issues.push(field, message);
+    match issues.finish() {
+        Err(e) => SimError::Invalid(e),
+        Ok(()) => SimError::Model(message.to_owned()),
+    }
+}
+
+#[cfg(test)]
+/// Runs to the end, applying each scripted command at the start of its second. The same script
+/// that a live run logged reproduces that run exactly.
+pub fn run_scripted(
+    model: &Model,
+    options: &SimOptions,
+    script: &[ControlRecord],
+) -> Result<SimReport, SimError> {
+    let mut sim = Simulation::new(model, options);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let seconds = options.duration_s.ceil() as u64;
+    for second in 0..seconds {
+        for record in script.iter().filter(|r| u64::from(r.t_s) == second) {
+            sim.apply_control(&record.command)?;
+        }
+        sim.step_until((second + 1) * US_PER_S)?;
+    }
+    sim.step_until(sim.end_us())?;
+    Ok(sim.finish())
 }
 
 pub fn run(model: &Model, options: &SimOptions) -> Result<SimReport, SimError> {
@@ -235,7 +273,11 @@ impl<'a> Simulation<'a> {
                 };
                 model.edges.len()
             ],
+            faults: model.faults.clone(),
             active: vec![false; model.faults.len()],
+            live_mult: 1.0,
+            live_peak: 1.0,
+            controls: Vec::new(),
             arrivals: Stream::new(seed, 0),
             attrs: Stream::new(seed, 1),
             fault_rng: Stream::new(seed, 2 + node_count),
@@ -287,6 +329,79 @@ impl<'a> Simulation<'a> {
         }
         self.clock = limit;
         Ok(())
+    }
+
+    /// Applies a live command at the current simulated second and logs it. Returns the log entry.
+    pub fn apply_control(&mut self, command: &ControlCommand) -> Result<ControlRecord, SimError> {
+        command.validate()?;
+        let now = self.clock;
+        let (summary, fault_id) = match command {
+            ControlCommand::SetTraffic { multiplier } => {
+                self.live_mult = *multiplier;
+                self.live_peak = self.live_peak.max(*multiplier);
+                (format!("Traffic \u{d7}{multiplier}"), None)
+            }
+            ControlCommand::InjectFault {
+                target,
+                fault,
+                duration_s,
+            } => {
+                let node = self
+                    .model
+                    .nodes
+                    .iter()
+                    .position(|n| n.id == *target && n.kind != NodeKind::Client)
+                    .ok_or_else(|| invalid("target", "must be a server node of the topology"))?;
+                let id = format!("live-{}", self.faults.len() - self.model.faults.len() + 1);
+                let label = format!(
+                    "{} (live)",
+                    fault.describe_at(&self.model.nodes[node].label)
+                );
+                let end_us = now + ms_to_us(duration_s * 1_000.0);
+                let index = to_u32(self.faults.len() as u64);
+                self.faults.push(CompiledFault {
+                    id: id.clone(),
+                    kind: fault.clone(),
+                    target: FaultTarget::Node(node),
+                    start_us: now,
+                    end_us,
+                    label: label.clone(),
+                });
+                self.active.push(false);
+                self.schedule(now, EventKind::FaultStart { fault: index });
+                if end_us <= self.end_us {
+                    self.schedule(end_us, EventKind::FaultEnd { fault: index });
+                }
+                (label, Some(id))
+            }
+            ControlCommand::EndFault { fault_id } => {
+                let index = self
+                    .faults
+                    .iter()
+                    .position(|f| f.id == *fault_id)
+                    .filter(|&i| self.active[i])
+                    .ok_or_else(|| invalid("faultId", "is not in effect right now"))?;
+                self.faults[index].end_us = now;
+                self.schedule(
+                    now,
+                    EventKind::FaultEnd {
+                        fault: to_u32(index as u64),
+                    },
+                );
+                (
+                    format!("Ended: {}", self.faults[index].label),
+                    Some(fault_id.clone()),
+                )
+            }
+        };
+        let record = ControlRecord {
+            t_s: to_u32(now / US_PER_S),
+            command: command.clone(),
+            summary,
+            fault_id,
+        };
+        self.controls.push(record.clone());
+        Ok(record)
     }
 
     pub fn is_finished(&self) -> bool {
@@ -345,7 +460,6 @@ impl<'a> Simulation<'a> {
         #[allow(clippy::cast_precision_loss)]
         let progress = (self.clock as f64 / self.end_us as f64).min(1.0);
         let active_faults = self
-            .model
             .faults
             .iter()
             .zip(&self.active)
@@ -362,7 +476,7 @@ impl<'a> Simulation<'a> {
 
     /// Candidate gap of the Poisson process at the peak rate, in microseconds.
     fn next_arrival_gap(&mut self) -> u64 {
-        let peak_rps = self.model.rps * self.model.peak_multiplier();
+        let peak_rps = self.model.rps * self.model.peak_multiplier() * self.live_peak;
         ms_to_us(self.arrivals.exponential(1_000.0 / peak_rps)).max(1)
     }
 
@@ -378,7 +492,8 @@ impl<'a> Simulation<'a> {
         // Thinning: keep a candidate with probability rate(t) / peak rate.
         #[allow(clippy::cast_precision_loss)]
         let t_s = now as f64 / US_PER_S as f64;
-        let keep = self.model.rate_multiplier(t_s) / self.model.peak_multiplier();
+        let keep = self.model.rate_multiplier(t_s) * self.live_mult
+            / (self.model.peak_multiplier() * self.live_peak);
         if self.arrivals.unit() >= keep {
             return;
         }
@@ -626,13 +741,7 @@ impl<'a> Simulation<'a> {
         let mut lost = vec![0.0; n];
         let mut extra = vec![0u64; self.edges.len()];
         let mut delivered = vec![1.0; self.edges.len()];
-        for (f, _) in self
-            .model
-            .faults
-            .iter()
-            .zip(&self.active)
-            .filter(|(_, a)| **a)
-        {
+        for (f, _) in self.faults.iter().zip(&self.active).filter(|(_, a)| **a) {
             match (f.target, &f.kind) {
                 (FaultTarget::Node(i), FaultKind::Crash) => up[i] = false,
                 (FaultTarget::Node(i), FaultKind::Slowdown { factor }) => slow[i] *= factor,
@@ -741,6 +850,7 @@ impl<'a> Simulation<'a> {
             bottleneck,
             timeline,
             faults,
+            controls: self.controls.clone(),
             assumptions: self.model.assumptions.clone(),
         }
     }
@@ -803,8 +913,7 @@ impl<'a> Simulation<'a> {
     /// Compares each fault window with equally long windows before and after it.
     fn fault_impacts(&self) -> Vec<FaultImpact> {
         let n = self.buckets.len();
-        self.model
-            .faults
+        self.faults
             .iter()
             .filter(|f| f.start_us <= self.end_us)
             .map(|f| {
