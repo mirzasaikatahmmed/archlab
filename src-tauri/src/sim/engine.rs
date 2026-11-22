@@ -8,7 +8,7 @@ use super::SimError;
 use super::control::{ControlCommand, ControlRecord};
 use super::model::{CompiledFault, FaultTarget, Model, ms_to_us};
 use super::report::{
-    Bottleneck, ESTIMATE_NOTICE, FaultImpact, Latency, LiveNodeTick, LiveTick, NodeReport,
+    Backlog, Bottleneck, ESTIMATE_NOTICE, FaultImpact, Latency, LiveNodeTick, LiveTick, NodeReport,
     Severity, SimOptions, SimReport, Summary, TimelinePoint, WindowStats, severity_for,
 };
 use super::rng::Stream;
@@ -81,6 +81,8 @@ struct Request {
     /// Client the request came from, where retries start again.
     client: usize,
     attempt: u32,
+    /// Set for a background message: the queue it was taken from. It has no client to answer.
+    job_of: Option<u32>,
 }
 
 #[derive(Clone, Copy)]
@@ -117,6 +119,16 @@ struct NodeState {
     epoch: u32,
     slow: f64,
     workers: usize,
+    /// Gateway rate limit: tokens available and when they were last topped up.
+    tokens: f64,
+    token_t: u64,
+    /// Messages waiting for a worker, for an asynchronous queue.
+    backlog: VecDeque<u32>,
+    jobs_enqueued: u32,
+    jobs_done: u32,
+    jobs_failed: u32,
+    /// Time each message waited in the queue, in microseconds.
+    lags: Vec<u32>,
 }
 
 #[derive(Clone, Copy)]
@@ -264,6 +276,13 @@ impl<'a> Simulation<'a> {
                     epoch: 0,
                     slow: 1.0,
                     workers: spec.servers,
+                    tokens: burst(spec.rate_limit_rps),
+                    token_t: 0,
+                    backlog: VecDeque::new(),
+                    jobs_enqueued: 0,
+                    jobs_done: 0,
+                    jobs_failed: 0,
+                    lags: Vec::new(),
                 })
                 .collect(),
             edges: vec![
@@ -451,7 +470,7 @@ impl<'a> Simulation<'a> {
                 LiveNodeTick {
                     id: spec.id.clone(),
                     utilization,
-                    queue: to_u32(state.waiting.len() as u64),
+                    queue: to_u32((state.waiting.len() + state.backlog.len()) as u64),
                     busy: to_u32(state.busy as u64),
                     dropped: state.drops_all,
                 }
@@ -510,6 +529,7 @@ impl<'a> Simulation<'a> {
             cache_done: false,
             client,
             attempt: 0,
+            job_of: None,
         });
         if now >= self.warmup_us {
             self.offered += 1;
@@ -570,6 +590,8 @@ impl<'a> Simulation<'a> {
         }
         if !state.up {
             self.attempt_failed(now, req, node, DropReason::Faulted);
+        } else if !take_token(state, spec.rate_limit_rps, now) {
+            self.attempt_failed(now, req, node, DropReason::Rejected);
         } else if state.busy < state.workers {
             self.start(now, req, node);
         } else if state.busy + state.waiting.len() < spec.capacity {
@@ -625,6 +647,7 @@ impl<'a> Simulation<'a> {
             state.latencies.push(to_u32(now - entered));
         }
         self.pump(now, node);
+        self.dispatch_feeders(now, node);
         self.after_service(now, req, node);
     }
 
@@ -646,9 +669,105 @@ impl<'a> Simulation<'a> {
                 Some((owner, to)) => self.send(now, req, owner, to),
                 None => self.complete(now, req, node),
             }
+        } else if spec.kind == NodeKind::Cdn {
+            let hit = self.reqs[req as usize].read && self.attrs.unit() < spec.hit_ratio;
+            if hit {
+                self.complete(now, req, node);
+            } else {
+                let target = self.route(req, node);
+                self.forward(now, req, node, target);
+            }
+        } else if spec.async_queue {
+            self.enqueue(now, req, node);
         } else {
             let target = self.route(req, node);
             self.forward(now, req, node, target);
+        }
+    }
+
+    /// A producer's message is stored (or refused if the queue is full); the producer is answered
+    /// either way, and a worker takes the message later.
+    fn enqueue(&mut self, now: u64, req: u32, node: usize) {
+        self.advance(node, now);
+        if self.states[node].backlog.len() >= self.model.nodes[node].backlog_limit {
+            self.attempt_failed(now, req, node, DropReason::Rejected);
+            return;
+        }
+        let client = self.reqs[req as usize].client;
+        let job = to_u32(self.reqs.len() as u64);
+        self.reqs.push(Request {
+            start: now,
+            entered: now,
+            read: false,
+            fallback: None,
+            cache_done: false,
+            client,
+            attempt: 0,
+            job_of: Some(to_u32(node as u64)),
+        });
+        let measured = now >= self.warmup_us;
+        let state = &mut self.states[node];
+        state.backlog.push_back(job);
+        state.max_queue = state
+            .max_queue
+            .max(state.waiting.len() + state.backlog.len());
+        if measured {
+            state.jobs_enqueued += 1;
+        }
+        self.complete(now, req, node);
+        self.dispatch(now, node);
+    }
+
+    /// Hands queued messages to free workers of `queue`, oldest first.
+    fn dispatch(&mut self, now: u64, queue: usize) {
+        loop {
+            if self.states[queue].backlog.is_empty() {
+                return;
+            }
+            let Some(worker) = self.free_worker(queue) else {
+                return;
+            };
+            self.advance(queue, now);
+            let Some(job) = self.states[queue].backlog.pop_front() else {
+                return;
+            };
+            self.advance(worker, now);
+            let measured = now >= self.warmup_us;
+            let waited = now - self.reqs[job as usize].entered;
+            if measured {
+                self.states[queue].lags.push(to_u32(waited));
+                self.states[worker].arrivals += 1;
+            }
+            let r = &mut self.reqs[job as usize];
+            r.start = now;
+            r.entered = now;
+            self.start(now, job, worker);
+        }
+    }
+
+    /// A worker of `queue` that is up and has an idle worker slot, in round-robin order.
+    fn free_worker(&mut self, queue: usize) -> Option<usize> {
+        let spec = &self.model.nodes[queue];
+        let count = spec.next.len();
+        for offset in 0..count {
+            let candidate = spec.next[(self.states[queue].rr + offset) % count];
+            let state = &self.states[candidate];
+            if self.model.nodes[candidate].kind == NodeKind::Worker
+                && state.up
+                && state.busy < state.workers
+            {
+                self.states[queue].rr += offset + 1;
+                return Some(candidate);
+            }
+        }
+        None
+    }
+
+    /// A worker has room again: let the queues that feed it send more.
+    fn dispatch_feeders(&mut self, now: u64, worker: usize) {
+        for i in 0..self.model.nodes[worker].feeders.len() {
+            let queue = self.model.nodes[worker].feeders[i];
+            self.dispatch(now, queue);
         }
     }
 
@@ -681,6 +800,12 @@ impl<'a> Simulation<'a> {
 
     /// The response reached the client. A late response counts as a failed attempt.
     fn complete(&mut self, now: u64, req: u32, last: usize) {
+        if let Some(queue) = self.reqs[req as usize].job_of {
+            if now >= self.warmup_us {
+                self.states[queue as usize].jobs_done += 1;
+            }
+            return;
+        }
         let done = now + self.model.hop_us;
         let age = done - self.reqs[req as usize].start;
         if age > self.model.timeout_us {
@@ -708,6 +833,13 @@ impl<'a> Simulation<'a> {
                 DropReason::TimedOut => state.timed_out += 1,
                 DropReason::Faulted => state.faulted += 1,
             }
+        }
+
+        if let Some(queue) = self.reqs[req as usize].job_of {
+            if measured {
+                self.states[queue as usize].jobs_failed += 1;
+            }
+            return;
         }
 
         let r = &mut self.reqs[req as usize];
@@ -790,6 +922,7 @@ impl<'a> Simulation<'a> {
             }
         } else if up && (changed || !was_up) {
             self.pump(now, node);
+            self.dispatch_feeders(now, node);
         }
     }
 
@@ -814,7 +947,7 @@ impl<'a> Simulation<'a> {
                 let dt = (to - from) as f64;
                 state.busy_area += state.busy as f64 * dt;
                 state.avail_area += available(state) as f64 * dt;
-                state.queue_area += state.waiting.len() as f64 * dt;
+                state.queue_area += (state.waiting.len() + state.backlog.len()) as f64 * dt;
             }
         }
         state.last_t = now;
@@ -868,7 +1001,17 @@ impl<'a> Simulation<'a> {
                 0.0
             };
             let dropped = state.rejected + state.timed_out + state.faulted;
-            let severity = severity_for(utilization, dropped);
+            let mut severity = severity_for(utilization, dropped);
+            let backlog = spec.async_queue.then(|| Backlog {
+                enqueued: state.jobs_enqueued,
+                processed: state.jobs_done,
+                failed: state.jobs_failed,
+                left: to_u32(state.backlog.len() as u64),
+                lag: latency(&mut state.lags),
+            });
+            if backlog.as_ref().is_some_and(backlog_is_growing) {
+                severity = Severity::Saturated;
+            }
             out.push(NodeReport {
                 id: spec.id.clone(),
                 label: spec.label.clone(),
@@ -885,6 +1028,7 @@ impl<'a> Simulation<'a> {
                 max_queue: to_u32(state.max_queue as u64),
                 latency: latency(&mut state.latencies),
                 severity,
+                backlog,
             });
         }
         out
@@ -994,6 +1138,33 @@ fn available(state: &NodeState) -> usize {
     if state.up { state.workers } else { 0 }
 }
 
+/// More than one message in twenty is still waiting at the end: the queue is filling up.
+fn backlog_is_growing(b: &Backlog) -> bool {
+    b.left > 0 && f64::from(b.left) > f64::from(b.enqueued) * 0.05
+}
+
+/// Tokens a gateway can save up: a tenth of a second of its limit, and at least one.
+fn burst(limit_rps: f64) -> f64 {
+    (limit_rps / 10.0).max(1.0)
+}
+
+/// Takes one token for a request at `now`; always succeeds when there is no limit.
+fn take_token(state: &mut NodeState, limit_rps: f64, now: u64) -> bool {
+    if limit_rps <= 0.0 {
+        return true;
+    }
+    #[allow(clippy::cast_precision_loss)]
+    let elapsed_s = now.saturating_sub(state.token_t) as f64 / 1e6;
+    state.tokens = (state.tokens + elapsed_s * limit_rps).min(burst(limit_rps));
+    state.token_t = now;
+    if state.tokens >= 1.0 {
+        state.tokens -= 1.0;
+        true
+    } else {
+        false
+    }
+}
+
 fn find_bottleneck(nodes: &[NodeReport]) -> Option<Bottleneck> {
     let drops = |n: &NodeReport| n.rejected + n.timed_out + n.faulted;
     let worst = nodes
@@ -1018,6 +1189,12 @@ fn find_bottleneck(nodes: &[NodeReport]) -> Option<Bottleneck> {
         reason.push_str(&format!(
             ", {} requests lost to injected faults",
             worst.faulted
+        ));
+    }
+    if let Some(backlog) = worst.backlog.as_ref().filter(|b| backlog_is_growing(b)) {
+        reason.push_str(&format!(
+            ", {} messages still waiting at the end (the workers cannot keep up)",
+            backlog.left
         ));
     }
     Some(Bottleneck {

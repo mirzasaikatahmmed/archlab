@@ -12,10 +12,18 @@ pub const TEMPLATE_SCHEMA_VERSION: u32 = 1;
 
 /// Add a new template by dropping a JSON file in `templates/` and listing it here.
 const EMBEDDED: &[&str] = &[
+    include_str!("../../templates/api-gateway.json"),
+    include_str!("../../templates/cdn.json"),
+    include_str!("../../templates/kafka.json"),
+    include_str!("../../templates/memcached.json"),
+    include_str!("../../templates/mongodb.json"),
+    include_str!("../../templates/mysql.json"),
     include_str!("../../templates/nginx.json"),
     include_str!("../../templates/node.json"),
     include_str!("../../templates/postgres.json"),
+    include_str!("../../templates/rabbitmq.json"),
     include_str!("../../templates/redis.json"),
+    include_str!("../../templates/worker.json"),
 ];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
@@ -57,6 +65,12 @@ pub struct SimParams {
     /// Setting holding the cache hit ratio (cache nodes only).
     #[serde(default)]
     pub hit_ratio_setting: Option<String>,
+    /// Setting holding a gateway's request limit per second; 0 means unlimited (gateways only).
+    #[serde(default)]
+    pub rate_limit_setting: Option<String>,
+    /// Setting holding how many messages a queue may hold (queues with workers only).
+    #[serde(default)]
+    pub backlog_setting: Option<String>,
 }
 
 impl SimParams {
@@ -77,6 +91,8 @@ impl SimParams {
             ("concurrencySetting", &self.concurrency_setting),
             ("queueSetting", &self.queue_setting),
             ("hitRatioSetting", &self.hit_ratio_setting),
+            ("rateLimitSetting", &self.rate_limit_setting),
+            ("backlogSetting", &self.backlog_setting),
         ] {
             if let Some(key) = key {
                 issues.check(
@@ -199,7 +215,43 @@ mod tests {
     #[test]
     fn all_embedded_templates_parse_and_validate() {
         let ids: Vec<_> = builtin().iter().map(|t| t.id.as_str()).collect();
-        assert_eq!(ids, ["nginx", "node", "postgres", "redis"]);
+        assert_eq!(
+            ids,
+            [
+                "api-gateway",
+                "cdn",
+                "kafka",
+                "memcached",
+                "mongodb",
+                "mysql",
+                "nginx",
+                "node",
+                "postgres",
+                "rabbitmq",
+                "redis",
+                "worker"
+            ]
+        );
+    }
+
+    #[test]
+    fn every_server_node_type_has_a_template_to_configure_it() {
+        use super::NodeKind::*;
+        for kind in [
+            LoadBalancer,
+            AppServer,
+            Database,
+            Cache,
+            Queue,
+            ApiGateway,
+            Cdn,
+            Worker,
+        ] {
+            assert!(
+                builtin().iter().any(|t| t.node_kinds.contains(&kind)),
+                "no template for {kind:?}"
+            );
+        }
     }
 
     #[test]

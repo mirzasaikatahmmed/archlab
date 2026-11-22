@@ -15,3 +15,4 @@
 | [011](ADR-011-export.md)                    | Export: JSON, Markdown, SVG, WebM            | Accepted |
 | [012](ADR-012-packaging-and-updates.md)     | Packaging, signing, updates, ffmpeg sidecar  | Accepted |
 | [013](ADR-013-live-controls.md)             | Live controls: steer a run while it plays    | Accepted |
+| [014](ADR-014-more-node-types.md)           | More node types: gateway, CDN, queue+worker  | Accepted |

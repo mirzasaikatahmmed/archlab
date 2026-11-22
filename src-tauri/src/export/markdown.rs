@@ -21,6 +21,9 @@ pub fn kind_name(kind: NodeKind) -> &'static str {
         NodeKind::Database => "Database",
         NodeKind::Cache => "Cache",
         NodeKind::Queue => "Queue",
+        NodeKind::ApiGateway => "API gateway",
+        NodeKind::Cdn => "CDN",
+        NodeKind::Worker => "Worker",
     }
 }
 

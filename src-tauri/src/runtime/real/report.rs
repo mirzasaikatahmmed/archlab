@@ -149,6 +149,7 @@ pub fn build(
             max_queue: u32::try_from(stats.max_queue.load(Ordering::Relaxed)).unwrap_or(u32::MAX),
             latency: latency(&mut samples),
             severity: severity_for(utilization, rejected + timed_out),
+            backlog: None,
         });
     }
 

@@ -16,6 +16,8 @@ const REF_GHZ: f64 = 3.0;
 const REF_DISK_IOPS: f64 = 20_000.0;
 const DEFAULT_HIT_RATIO: f64 = 0.8;
 const MAX_SERVERS: f64 = 100_000.0;
+/// Messages a queue holds when its template sets no limit.
+const DEFAULT_BACKLOG: f64 = 10_000.0;
 
 #[derive(Debug, Clone)]
 pub struct NodeModel {
@@ -36,6 +38,14 @@ pub struct NodeModel {
     pub next: Vec<usize>,
     /// Caches that are read before `next`.
     pub caches: Vec<usize>,
+    /// Requests per second a gateway accepts (all replicas together); zero means unlimited.
+    pub rate_limit_rps: f64,
+    /// Messages an asynchronous queue holds before it rejects publishers.
+    pub backlog_limit: usize,
+    /// A queue with at least one worker after it: requests complete once the message is queued.
+    pub async_queue: bool,
+    /// Queues that feed this worker.
+    pub feeders: Vec<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,6 +121,22 @@ impl Model {
             }
         }
 
+        for q in 0..nodes.len() {
+            if nodes[q].kind != NodeKind::Queue {
+                continue;
+            }
+            let workers: Vec<usize> = nodes[q]
+                .next
+                .iter()
+                .copied()
+                .filter(|&w| nodes[w].kind == NodeKind::Worker)
+                .collect();
+            nodes[q].async_queue = !workers.is_empty();
+            for w in workers {
+                nodes[w].feeders.push(q);
+            }
+        }
+
         let clients: Vec<usize> = nodes
             .iter()
             .enumerate()
@@ -141,6 +167,7 @@ impl Model {
         let policy = &project.chaos.policy;
 
         let traffic: &TrafficProfile = &project.traffic_profile;
+        let nodes_for_notes = notes_for(&nodes);
         Ok(Self {
             nodes,
             clients,
@@ -154,7 +181,7 @@ impl Model {
             rps: traffic.requests_per_second,
             read_ratio: traffic.read_ratio,
             spike: traffic.spike.clone(),
-            assumptions: assumptions(),
+            assumptions: assumptions(nodes_for_notes),
         })
     }
 
@@ -224,8 +251,33 @@ fn compile_fault(
     })
 }
 
-fn assumptions() -> Vec<String> {
-    vec![
+/// Extra modelling notes for the parts of the topology that need them, so older reports keep
+/// exactly the notes they always had.
+fn notes_for(nodes: &[NodeModel]) -> Vec<String> {
+    let mut notes = Vec::new();
+    if nodes.iter().any(|n| n.async_queue) {
+        notes.push(
+            "A queue with workers after it answers once the message is stored; workers then process it in the background, so their time is not part of the client's latency. Delivery from the queue to a worker is instant, and messages wait in the queue without timing out."
+                .into(),
+        );
+    }
+    if nodes.iter().any(|n| n.rate_limit_rps > 0.0) {
+        notes.push(
+            "A gateway rate limit is a token bucket with a burst of a tenth of a second; requests over the limit are rejected at once."
+                .into(),
+        );
+    }
+    if nodes.iter().any(|n| n.kind == NodeKind::Cdn) {
+        notes.push(
+            "A CDN serves its hit ratio of reads from the edge; writes and misses continue to the next node."
+                .into(),
+        );
+    }
+    notes
+}
+
+fn assumptions(extra: Vec<String>) -> Vec<String> {
+    let mut all = vec![
         "Open-loop traffic: requests arrive at the configured rate; concurrent users are not used yet."
             .into(),
         "Every node is one machine with the server profile's hardware.".into(),
@@ -234,7 +286,9 @@ fn assumptions() -> Vec<String> {
             .into(),
         "A request that finishes after the client timeout counts as failed, but still used server capacity."
             .into(),
-    ]
+    ];
+    all.extend(extra);
+    all
 }
 
 fn defaults_for(kind: NodeKind) -> SimParams {
@@ -248,6 +302,8 @@ fn defaults_for(kind: NodeKind) -> SimParams {
         queue_setting: None,
         default_queue,
         hit_ratio_setting: None,
+        rate_limit_setting: None,
+        backlog_setting: None,
     };
     match kind {
         NodeKind::Client => p(0.001, 1.0, 0.0, 1.0, 0),
@@ -256,6 +312,9 @@ fn defaults_for(kind: NodeKind) -> SimParams {
         NodeKind::Database => p(4.0, 0.4, 0.8, 3.0, 256),
         NodeKind::Cache => p(0.1, 0.8, 0.4, 1.0, 1024),
         NodeKind::Queue => p(0.3, 0.7, 0.4, 1.0, 4096),
+        NodeKind::ApiGateway => p(0.4, 0.8, 0.4, 1.0, 2048),
+        NodeKind::Cdn => p(0.15, 0.8, 0.4, 1.0, 4096),
+        NodeKind::Worker => p(20.0, 0.6, 0.6, 1.0, 64),
     }
 }
 
@@ -288,6 +347,10 @@ fn node_model(node: &TopologyNode, server: &ServerProfile) -> NodeModel {
         cpu_share: 1.0,
         next: Vec::new(),
         caches: Vec::new(),
+        rate_limit_rps: 0.0,
+        backlog_limit: DEFAULT_BACKLOG as usize,
+        async_queue: false,
+        feeders: Vec::new(),
     };
     if node.kind == NodeKind::Client {
         return model;
@@ -321,10 +384,22 @@ fn node_model(node: &TopologyNode, server: &ServerProfile) -> NodeModel {
         model.cpu_share = cpu_ms / model.read_ms;
     }
     model.write_ms = model.read_ms * params.write_multiplier;
-    if node.kind == NodeKind::Cache {
+    if matches!(node.kind, NodeKind::Cache | NodeKind::Cdn) {
         model.hit_ratio = setting(&params.hit_ratio_setting)
             .unwrap_or(DEFAULT_HIT_RATIO)
             .clamp(0.0, 1.0);
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    match node.kind {
+        NodeKind::ApiGateway => {
+            let limit = setting(&params.rate_limit_setting).unwrap_or(0.0).max(0.0);
+            model.rate_limit_rps = limit * f64::from(node.replicas.max(1));
+        }
+        NodeKind::Queue => {
+            let limit = setting(&params.backlog_setting).unwrap_or(DEFAULT_BACKLOG);
+            model.backlog_limit = limit.max(1.0).round() as usize;
+        }
+        _ => {}
     }
     model
 }

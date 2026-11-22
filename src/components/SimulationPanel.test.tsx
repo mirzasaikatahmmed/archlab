@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Project, SimReport } from "../bindings";
@@ -59,6 +59,7 @@ const report: SimReport = {
       maxQueue: 40,
       latency,
       severity: "saturated",
+      backlog: null,
     },
   ],
   bottleneck: {
@@ -86,6 +87,43 @@ describe("SimulationPanel", () => {
     expect(runSimulation).toHaveBeenCalledWith(project, { seed: 1, durationS: 60, warmupS: 5 });
     expect(screen.getByText("93.0%")).toBeInTheDocument();
     expect(screen.getByText("Estimate from a simulation model.")).toBeInTheDocument();
+  });
+
+  it("shows what a message queue took in, worked off and still holds", async () => {
+    const first = report.nodes[0];
+    runSimulation.mockResolvedValue({
+      ...report,
+      nodes: [
+        ...report.nodes,
+        {
+          ...first,
+          id: "q",
+          label: "Orders queue",
+          kind: "queue",
+          backlog: {
+            enqueued: 9000,
+            processed: 4000,
+            failed: 3,
+            left: 5000,
+            lag: { meanMs: 9000, p50Ms: 9000, p95Ms: 17000, p99Ms: 18000 },
+          },
+        },
+      ],
+    });
+    render(<SimulationPanel project={project} />);
+    await userEvent.click(screen.getByRole("button", { name: "Run simulation" }));
+    const table = await screen.findByRole("table", { name: /Message queues/ });
+    expect(within(table).getByRole("rowheader", { name: "Orders queue" })).toBeInTheDocument();
+    expect(within(table).getByText("5000")).toBeInTheDocument();
+    expect(within(table).getByText("17000.0 ms")).toBeInTheDocument();
+  });
+
+  it("shows no queue table when nothing is queued", async () => {
+    runSimulation.mockResolvedValue(report);
+    render(<SimulationPanel project={project} />);
+    await userEvent.click(screen.getByRole("button", { name: "Run simulation" }));
+    await screen.findByRole("status");
+    expect(screen.queryByRole("table", { name: /Message queues/ })).not.toBeInTheDocument();
   });
 
   it("shows the fault impact table and retries when faults were injected", async () => {

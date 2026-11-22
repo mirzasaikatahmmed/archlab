@@ -60,6 +60,7 @@ const comparison: RealComparison = {
         maxQueue: 6,
         latency,
         severity: "healthy",
+        backlog: null,
       },
     ],
     timeline: [],

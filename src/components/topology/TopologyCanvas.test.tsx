@@ -9,8 +9,18 @@ describe("TopologyCanvas", () => {
   it("offers every node kind in the palette", () => {
     render(<TopologyCanvas topology={topology} templates={templates} onChange={vi.fn()} />);
     const toolbar = screen.getByRole("toolbar", { name: "Add node" });
-    expect(toolbar.querySelectorAll("button")).toHaveLength(6);
-    for (const label of ["Client", "Load balancer", "App server", "Database", "Cache", "Queue"]) {
+    expect(toolbar.querySelectorAll("button")).toHaveLength(9);
+    for (const label of [
+      "Client",
+      "Load balancer",
+      "App server",
+      "Database",
+      "Cache",
+      "Queue",
+      "API gateway",
+      "CDN",
+      "Worker",
+    ]) {
       expect(screen.getByRole("button", { name: `+ ${label}` })).toBeInTheDocument();
     }
   });

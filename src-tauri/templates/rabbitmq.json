@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "rabbitmq",
+  "version": 1,
+  "name": "RabbitMQ",
+  "description": "Message broker. With worker nodes after it, requests return once the message is queued.",
+  "nodeKinds": ["queue"],
+  "settings": [
+    {
+      "key": "schedulers",
+      "label": "Erlang schedulers",
+      "unit": "threads",
+      "default": 4,
+      "min": 1,
+      "max": 256,
+      "description": "Threads that accept and route messages."
+    },
+    {
+      "key": "max_connections",
+      "label": "Max connections",
+      "unit": "conn",
+      "default": 1024,
+      "min": 1,
+      "max": 1000000,
+      "description": "Producers waiting to publish before new ones are rejected."
+    },
+    {
+      "key": "max_queue_length",
+      "label": "Max queue length",
+      "unit": "messages",
+      "default": 100000,
+      "min": 1,
+      "max": 100000000,
+      "description": "Messages held; publishing is rejected beyond this."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 0.4,
+    "cpuFraction": 0.6,
+    "sigma": 0.5,
+    "writeMultiplier": 1.2,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 1024,
+    "concurrencySetting": "schedulers",
+    "queueSetting": "max_connections",
+    "backlogSetting": "max_queue_length"
+  }
+}

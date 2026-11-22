@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "mongodb",
+  "version": 1,
+  "name": "MongoDB",
+  "description": "Document database (WiredTiger) with connection and cache settings.",
+  "nodeKinds": ["database"],
+  "settings": [
+    {
+      "key": "max_connections",
+      "label": "Max connections",
+      "unit": "conn",
+      "default": 200,
+      "min": 1,
+      "max": 100000,
+      "description": "Maximum concurrent client connections."
+    },
+    {
+      "key": "wiredtiger_cache_gb",
+      "label": "WiredTiger cache",
+      "unit": "GB",
+      "default": 1,
+      "min": 0.25,
+      "max": 4096,
+      "description": "Memory for the storage engine's cache."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 2.5,
+    "cpuFraction": 0.45,
+    "sigma": 0.8,
+    "writeMultiplier": 2.5,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 256,
+    "concurrencySetting": "max_connections"
+  }
+}

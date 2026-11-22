@@ -75,6 +75,23 @@ export type AppInfo = {
 	version: string,
 };
 
+/**
+ *  What a message queue did: how much it took in, how much was worked off, and how long
+ *  messages waited. Messages still queued at the end mean the workers cannot keep up.
+ */
+export type Backlog = {
+	/**  Messages accepted from producers in the measured window. */
+	enqueued: number,
+	/**  Messages that workers finished. */
+	processed: number,
+	/**  Messages that failed in a worker (rejected, timed out or lost to a crash). */
+	failed: number,
+	/**  Messages still waiting when the run ended. */
+	left: number,
+	/**  Time from being queued to a worker picking the message up. */
+	lag: Latency,
+};
+
 export type Bottleneck = {
 	nodeId: string,
 	label: string,
@@ -317,7 +334,13 @@ export type NodeBrief = {
 	severity: Severity,
 };
 
-export type NodeKind = "client" | "loadBalancer" | "appServer" | "database" | "cache" | "queue";
+export type NodeKind = "client" | "loadBalancer" | "appServer" | "database" | "cache" | "queue" | 
+/**  Entry point that can limit the request rate (see `rate_limit_rps`). */
+"apiGateway" | 
+/**  Edge cache in front of the load balancer; absorbs a share of reads. */
+"cdn" | 
+/**  Background consumer of a queue's messages. */
+"worker";
 
 export type NodeReport = {
 	id: string,
@@ -340,6 +363,8 @@ export type NodeReport = {
 	/**  Time spent in the node (waiting plus service). */
 	latency: Latency,
 	severity: Severity,
+	/**  Messages held, for a queue that has workers after it. */
+	backlog: Backlog | null,
 };
 
 export type OperatingSystem = "linux" | "macOs" | "windows" | "other";
@@ -487,6 +512,10 @@ export type SimParams = {
 	defaultQueue: number,
 	/**  Setting holding the cache hit ratio (cache nodes only). */
 	hitRatioSetting?: string | null,
+	/**  Setting holding a gateway's request limit per second; 0 means unlimited (gateways only). */
+	rateLimitSetting?: string | null,
+	/**  Setting holding how many messages a queue may hold (queues with workers only). */
+	backlogSetting?: string | null,
 };
 
 export type SimReport = {

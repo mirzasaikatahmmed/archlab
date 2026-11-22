@@ -15,7 +15,7 @@ rusqlite_migration, `ProjectRepository`), runtime/detect (sysinfo), sim/ (model 
 
 ## Current state
 
-Phases 1-10 are on `main`; live controls (ADR-013) are on `feat/live-controls`, UNCOMMITTED (pushed to private GitHub repo `mirzasaikatahmmed/archlab`, head `dffc04f`). GUI never run by hand (`pnpm tauri dev`); visuals checked only
+Phases 1-10 are on `main`; live controls (ADR-013) committed on `feat/live-controls` (`6d2e093`, not merged); more node types (ADR-014) on `feat/more-nodes`, UNCOMMITTED (pushed to private GitHub repo `mirzasaikatahmmed/archlab`, head `dffc04f`). GUI never run by hand (`pnpm tauri dev`); visuals checked only
 in headless Chrome with a mocked backend; real-mode timing only in Rust tests; sim-vs-real divergence not measured by
 the user. Release builds needed for meaningful calibration. Video needs a system ffmpeg (libvpx-vp9); not
 yet run end to end with a real ffmpeg (none installed here; encoder tested with a fake script). Release workflow (tag `v*` -> draft release)
@@ -79,6 +79,9 @@ Scenario import/export deferred. Next: first tag/draft release, then polish.
 - Live controls (ADR-013): `sim/control.rs` (ControlCommand/ControlRecord), `Simulation::apply_control`, `LiveRuns::control`
   waits for the run's reply; `SimReport.controls` logs them; `start_live_run(.., script, ..)` replays; `LiveEvent::Finished`
   boxes the report (clippy size lint). UI: `LiveControls`, `lib/liveFaults.ts`.
+- Node types (ADR-014): `apiGateway` (token-bucket rate limit), `cdn` (read hits end at the edge), `worker`; a Queue with
+  Worker children is async (`NodeModel.async_queue`, backlog in `NodeState`, jobs are `Request{job_of}`); `NodeReport.backlog`.
+  Queue without workers is unchanged. Real mode refuses the new behaviours. 8 new templates (JSON only).
 - sysinfo 0.40: `System::new()` and `Disks::new_with_refreshed_list()` return `Result`.
 
 ## Setup and run

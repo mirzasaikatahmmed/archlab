@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { FaultImpact, Latency, Severity, SimReport } from "../bindings";
+import type { FaultImpact, Latency, NodeReport, Severity, SimReport } from "../bindings";
 
 export const SEVERITY_LABEL: Record<Severity, string> = {
   healthy: "Healthy",
@@ -45,6 +45,42 @@ function Trend({ before, during, after }: { before: string; during: string; afte
       <span aria-hidden="true">→</span>
       <span className="muted">{after}</span>
     </span>
+  );
+}
+
+function BacklogTable({ nodes }: { nodes: NodeReport[] }) {
+  const queues = nodes.flatMap((n) => (n.backlog ? [{ node: n, backlog: n.backlog }] : []));
+  if (queues.length === 0) {
+    return null;
+  }
+  return (
+    <div className="table-wrap">
+      <table className="results">
+        <caption>Message queues: what workers have not caught up on is still waiting</caption>
+        <thead>
+          <tr>
+            <th>Queue</th>
+            <th>Queued</th>
+            <th>Processed</th>
+            <th>Failed</th>
+            <th>Still waiting</th>
+            <th>Wait p95</th>
+          </tr>
+        </thead>
+        <tbody>
+          {queues.map(({ node, backlog }) => (
+            <tr key={node.id}>
+              <th scope="row">{node.label}</th>
+              <td>{backlog.enqueued}</td>
+              <td>{backlog.processed}</td>
+              <td>{backlog.failed}</td>
+              <td>{backlog.left}</td>
+              <td>{ms(backlog.lag.p95Ms)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -177,6 +213,7 @@ export function ReportView({ report }: { report: SimReport }) {
           </tbody>
         </table>
       </div>
+      <BacklogTable nodes={report.nodes} />
       {report.faults.length > 0 && <FaultImpactTable faults={report.faults} />}
       {report.controls.length > 0 && (
         <section aria-label="Live controls">

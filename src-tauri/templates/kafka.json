@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "kafka",
+  "version": 1,
+  "name": "Kafka",
+  "description": "Log-based message broker with very cheap appends. With worker nodes after it, requests return once the message is appended.",
+  "nodeKinds": ["queue"],
+  "settings": [
+    {
+      "key": "io_threads",
+      "label": "I/O threads",
+      "unit": "threads",
+      "default": 8,
+      "min": 1,
+      "max": 256,
+      "description": "Threads that append messages (num.io.threads)."
+    },
+    {
+      "key": "max_connections",
+      "label": "Max connections",
+      "unit": "conn",
+      "default": 4096,
+      "min": 1,
+      "max": 1000000,
+      "description": "Producers waiting to publish before new ones are rejected."
+    },
+    {
+      "key": "retention_messages",
+      "label": "Retained backlog",
+      "unit": "messages",
+      "default": 1000000,
+      "min": 1,
+      "max": 1000000000,
+      "description": "Unconsumed messages kept before publishing is rejected."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 0.15,
+    "cpuFraction": 0.5,
+    "sigma": 0.4,
+    "writeMultiplier": 1,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 4096,
+    "concurrencySetting": "io_threads",
+    "queueSetting": "max_connections",
+    "backlogSetting": "retention_messages"
+  }
+}

@@ -90,6 +90,23 @@ pub struct Summary {
     pub latency: Latency,
 }
 
+/// What a message queue did: how much it took in, how much was worked off, and how long
+/// messages waited. Messages still queued at the end mean the workers cannot keep up.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Backlog {
+    /// Messages accepted from producers in the measured window.
+    pub enqueued: u32,
+    /// Messages that workers finished.
+    pub processed: u32,
+    /// Messages that failed in a worker (rejected, timed out or lost to a crash).
+    pub failed: u32,
+    /// Messages still waiting when the run ended.
+    pub left: u32,
+    /// Time from being queued to a worker picking the message up.
+    pub lag: Latency,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeReport {
@@ -113,6 +130,8 @@ pub struct NodeReport {
     /// Time spent in the node (waiting plus service).
     pub latency: Latency,
     pub severity: Severity,
+    /// Messages held, for a queue that has workers after it.
+    pub backlog: Option<Backlog>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]

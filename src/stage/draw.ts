@@ -25,6 +25,9 @@ const KIND_COLOR: Record<NodeKind, string> = {
   database: "#3cc596",
   cache: "#e6b13a",
   queue: "#e879b9",
+  apiGateway: "#a3e635",
+  cdn: "#22d3ee",
+  worker: "#f97316",
 };
 
 export function readPalette(el: Element): Palette {
@@ -249,6 +252,37 @@ function drawObject(f: Frame, node: SceneNode, load: NodeLoad): void {
       for (const o of [-16, 0, 16]) {
         box(f, gx + o, gy, 7, 14, 14, 0, color);
       }
+      break;
+    }
+    case "apiGateway": {
+      for (const o of [-15, 15]) {
+        box(f, gx + o, gy, 4, 5, 30, 0, color);
+      }
+      box(f, gx, gy, 19, 5, 6, 30, color);
+      dot(f, P(gx, gy + 5, 33), 1.6, status(f, load));
+      line(f, P(gx - 11, gy + 5, 8), P(gx + 11, gy + 5, 8), color, 0.6);
+      break;
+    }
+    case "cdn": {
+      cylinder(f, gx, gy, 20, 9, color);
+      box(f, gx, gy, 5, 5, 14, 9, color);
+      for (const [dx, dy] of [
+        [-14, -14],
+        [14, -14],
+        [14, 14],
+        [-14, 14],
+      ] as const) {
+        line(f, P(gx + dx * 0.4, gy + dy * 0.4, 24), P(gx + dx, gy + dy, 30), color, 0.7, 1.2);
+      }
+      break;
+    }
+    case "worker": {
+      box(f, gx, gy, 17, 15, 18, 0, color);
+      for (const o of [-9, 9]) {
+        box(f, gx + o, gy, 4, 4, 7, 18, color);
+      }
+      box(f, gx, gy, 5, 5, 11, 18, color);
+      dot(f, P(gx + 11, gy + 15, 9), 1.5, status(f, load));
       break;
     }
     case "client":

@@ -58,6 +58,17 @@ pub fn validate(project: &Project, options: &SimOptions) -> Result<(), Validatio
         "topology.nodes",
         &format!("real runs are limited to {MAX_NODES} nodes"),
     );
+    if let Ok(model) = crate::sim::model::Model::compile(project) {
+        let unsupported = model
+            .nodes
+            .iter()
+            .any(|n| n.async_queue || n.rate_limit_rps > 0.0 || n.kind == NodeKind::Cdn);
+        issues.check(
+            !unsupported,
+            "topology.nodes",
+            "real runs do not support message queues with workers, CDN nodes or gateway rate limits; use the simulation",
+        );
+    }
     issues.finish()
 }
 

@@ -1006,6 +1006,18 @@ details ul {
   --kind: #e879b9;
 }
 
+.kind-apiGateway {
+  --kind: #a3e635;
+}
+
+.kind-cdn {
+  --kind: #22d3ee;
+}
+
+.kind-worker {
+  --kind: #f97316;
+}
+
 @media (max-width: 900px) {
   .shell {
     grid-template-columns: 1fr;

@@ -44,8 +44,14 @@ external dependencies for end users. **All simulation results are estimates.**
   virtualization, file-descriptor limit. Fill it manually or click **Detect this machine**
   (sysinfo). Detected values that are guessed (disk IOPS, network, virtualization) are listed as
   notes; they are defaults, not measurements.
-- **Config templates**: Nginx, Node.js, PostgreSQL, Redis. Embedded versioned JSON in
-  `src-tauri/templates/`; pick one per node and override settings.
+- **Config templates**: Nginx, Node.js, PostgreSQL, MySQL, MongoDB, Redis, Memcached, RabbitMQ,
+  Kafka, API gateway, CDN edge and background worker. Embedded versioned JSON in
+  `src-tauri/templates/`; pick one per node and override settings. Numbers are rough guides.
+- **Node types**: client, load balancer, app server, database, cache, queue, **API gateway** (rate
+  limit), **CDN** (serves a share of reads at the edge) and **worker**. A queue with workers after
+  it is asynchronous: producers get an answer once the message is stored, and the report shows
+  what is still waiting. See [ADR-014](docs/adr/ADR-014-more-node-types.md). Real mode does not
+  support these three behaviours.
 - **Traffic profile**: concurrent users, requests/s, read/write ratio, spike pattern (none, step,
   periodic).
 - **Topology canvas**: Client, LoadBalancer, AppServer, Database, Cache, Queue nodes connected by
@@ -181,4 +187,4 @@ Rule: no business logic in the UI; commands only delegate to the Rust modules.
 
 ## Documentation
 
-- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode, ADR-009 what-if, ADR-010 scenarios, ADR-011 export, ADR-012 packaging and updates, ADR-013 live controls
+- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode, ADR-009 what-if, ADR-010 scenarios, ADR-011 export, ADR-012 packaging and updates, ADR-013 live controls, ADR-014 more node types

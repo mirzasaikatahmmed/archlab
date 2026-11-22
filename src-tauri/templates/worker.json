@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "worker",
+  "version": 1,
+  "name": "Background worker",
+  "description": "Consumer that processes queued messages (jobs) at its own pace; a thread or process pool.",
+  "nodeKinds": ["worker"],
+  "settings": [
+    {
+      "key": "concurrency",
+      "label": "Concurrency",
+      "unit": "workers",
+      "default": 4,
+      "min": 1,
+      "max": 1024,
+      "description": "Messages processed in parallel."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 20,
+    "cpuFraction": 0.6,
+    "sigma": 0.6,
+    "writeMultiplier": 1,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 64,
+    "concurrencySetting": "concurrency"
+  }
+}

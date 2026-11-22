@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "api-gateway",
+  "version": 1,
+  "name": "API gateway",
+  "description": "Entry point that routes requests and can limit how many it accepts per second (Kong, Envoy or a cloud gateway).",
+  "nodeKinds": ["apiGateway"],
+  "settings": [
+    {
+      "key": "workers",
+      "label": "Worker processes",
+      "unit": "workers",
+      "default": 4,
+      "min": 1,
+      "max": 1024,
+      "description": "Parallel request handlers."
+    },
+    {
+      "key": "max_connections",
+      "label": "Max connections",
+      "unit": "conn",
+      "default": 2048,
+      "min": 1,
+      "max": 1000000,
+      "description": "Requests the gateway holds at once, including those waiting."
+    },
+    {
+      "key": "rate_limit_rps",
+      "label": "Rate limit",
+      "unit": "req/s",
+      "default": 0,
+      "min": 0,
+      "max": 10000000,
+      "description": "Requests accepted per second; extra requests are rejected at once. 0 means no limit. Burst is a tenth of a second."
+    }
+  ],
+  "sim": {
+    "baseServiceMs": 0.4,
+    "cpuFraction": 0.8,
+    "sigma": 0.4,
+    "writeMultiplier": 1,
+    "concurrencyPerUnit": 1,
+    "defaultQueue": 2048,
+    "concurrencySetting": "workers",
+    "queueSetting": "max_connections",
+    "rateLimitSetting": "rate_limit_rps"
+  }
+}

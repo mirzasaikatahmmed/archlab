@@ -23,6 +23,12 @@ pub enum NodeKind {
     Database,
     Cache,
     Queue,
+    /// Entry point that can limit the request rate (see `rate_limit_rps`).
+    ApiGateway,
+    /// Edge cache in front of the load balancer; absorbs a share of reads.
+    Cdn,
+    /// Background consumer of a queue's messages.
+    Worker,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]

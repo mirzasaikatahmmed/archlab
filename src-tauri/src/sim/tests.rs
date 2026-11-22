@@ -703,3 +703,245 @@ mod controls {
         assert_ne!(first.summary, different.summary);
     }
 }
+
+mod new_nodes {
+    use super::*;
+    use crate::domain::chaos::{Fault, FaultKind};
+    use crate::sim::report::NodeReport;
+
+    fn configure(p: &mut Project, id: &str, template: &str, settings: &[(&str, f64)]) {
+        let node = p
+            .topology
+            .nodes
+            .iter_mut()
+            .find(|n| n.id == id)
+            .expect("node");
+        node.template = Some(TemplateRef {
+            id: template.to_owned(),
+            version: 1,
+        });
+        node.settings = settings
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), *v))
+            .collect::<BTreeMap<_, _>>();
+    }
+
+    fn node_of<'a>(report: &'a crate::sim::SimReport, id: &str) -> &'a NodeReport {
+        report
+            .nodes
+            .iter()
+            .find(|n| n.id == id)
+            .expect("node report")
+    }
+
+    fn gateway_app(rps: f64, limit: f64) -> Project {
+        let t = topology(
+            &[
+                ("c", NodeKind::Client),
+                ("gw", NodeKind::ApiGateway),
+                ("app", NodeKind::AppServer),
+            ],
+            &[("c", "gw"), ("gw", "app")],
+        );
+        let mut p = project(t, rps, 1.0);
+        p.server_profile.cpu_cores = 8;
+        configure(&mut p, "gw", "api-gateway", &[("rate_limit_rps", limit)]);
+        p
+    }
+
+    #[test]
+    fn a_gateway_rate_limit_rejects_the_excess_at_the_gateway() {
+        let limited = run(&gateway_app(300.0, 100.0), &options(2, 60.0)).expect("run");
+        let gw = node_of(&limited, "gw");
+        assert!(gw.rejected > 0, "{gw:?}");
+        let accepted = f64::from(gw.arrivals - gw.rejected) / 55.0;
+        assert!((accepted - 100.0).abs() < 12.0, "accepted {accepted} req/s");
+        assert!((limited.summary.throughput_rps - 100.0).abs() < 12.0);
+        assert!(limited.summary.error_rate > 0.5);
+        assert_eq!(node_of(&limited, "app").rejected, 0);
+
+        let open = run(&gateway_app(300.0, 0.0), &options(2, 60.0)).expect("run");
+        assert_eq!(node_of(&open, "gw").rejected, 0);
+        assert!(open.summary.error_rate < 0.01);
+        assert!(!open.assumptions.iter().any(|a| a.contains("rate limit")));
+        assert!(limited.assumptions.iter().any(|a| a.contains("rate limit")));
+    }
+
+    #[test]
+    fn a_cdn_keeps_its_share_of_reads_away_from_the_origin() {
+        let t = topology(
+            &[
+                ("c", NodeKind::Client),
+                ("cdn", NodeKind::Cdn),
+                ("app", NodeKind::AppServer),
+            ],
+            &[("c", "cdn"), ("cdn", "app")],
+        );
+        let mut reads = project(t.clone(), 100.0, 1.0);
+        reads.server_profile.cpu_cores = 8;
+        configure(&mut reads, "cdn", "cdn", &[("hit_ratio", 0.9)]);
+        let report = run(&reads, &options(5, 60.0)).expect("run");
+        let (edge, origin) = (node_of(&report, "cdn"), node_of(&report, "app"));
+        let passed = f64::from(origin.arrivals) / f64::from(edge.arrivals);
+        assert!((passed - 0.1).abs() < 0.03, "{passed}");
+        assert!(report.summary.error_rate < 0.01);
+
+        let mut writes = project(t, 100.0, 0.0);
+        writes.server_profile.cpu_cores = 8;
+        configure(&mut writes, "cdn", "cdn", &[("hit_ratio", 0.9)]);
+        let report = run(&writes, &options(5, 60.0)).expect("run");
+        assert_eq!(
+            node_of(&report, "app").arrivals,
+            node_of(&report, "cdn").arrivals,
+            "writes always reach the origin"
+        );
+    }
+
+    fn queue_worker(rps: f64) -> Project {
+        let t = topology(
+            &[
+                ("c", NodeKind::Client),
+                ("q", NodeKind::Queue),
+                ("w", NodeKind::Worker),
+            ],
+            &[("c", "q"), ("q", "w")],
+        );
+        let mut p = project(t, rps, 0.0);
+        p.server_profile.cpu_cores = 4;
+        p
+    }
+
+    #[test]
+    fn a_queue_with_workers_answers_at_once_and_the_workers_catch_up() {
+        let p = queue_worker(40.0);
+        let report = run(&p, &options(6, 60.0)).expect("run");
+        let q = node_of(&report, "q");
+        let backlog = q.backlog.as_ref().expect("backlog report");
+        // The client only waits for the message to be stored, not for the 20 ms job.
+        assert!(
+            report.summary.latency.p95_ms < 5.0,
+            "{:?}",
+            report.summary.latency
+        );
+        assert!(report.summary.error_rate < 0.001);
+        assert!(backlog.enqueued > 1_500, "{backlog:?}");
+        assert!(
+            backlog.processed + backlog.left >= backlog.enqueued - 5,
+            "{backlog:?}"
+        );
+        assert!(backlog.left < 10 && backlog.failed == 0, "{backlog:?}");
+        assert!(backlog.lag.p95_ms < 100.0, "{backlog:?}");
+        assert_eq!(report.bottleneck, None);
+        assert!(
+            report
+                .assumptions
+                .iter()
+                .any(|a| a.contains("workers after it"))
+        );
+    }
+
+    #[test]
+    fn workers_that_cannot_keep_up_leave_a_growing_backlog_but_clients_stay_fast() {
+        let mut p = queue_worker(400.0);
+        p.server_profile.cpu_cores = 2;
+        // Two workers drain about 100 messages a second; 25 s stays under the 10,000 default limit.
+        let report = run(&p, &options(6, 25.0)).expect("run");
+        let q = node_of(&report, "q");
+        let backlog = q.backlog.as_ref().expect("backlog report");
+        assert!(backlog.left > 5_000, "{backlog:?}");
+        assert!(backlog.lag.p95_ms > 1_000.0, "{backlog:?}");
+        assert_eq!(q.severity, Severity::Saturated);
+        assert!(q.max_queue > 5_000 && q.mean_queue > 1_000.0);
+        assert!(
+            report.summary.error_rate < 0.001,
+            "producers are not slowed down"
+        );
+        assert!(report.summary.latency.p95_ms < 5.0);
+        let bottleneck = report.bottleneck.expect("bottleneck");
+        assert_eq!(bottleneck.node_id, "w");
+    }
+
+    #[test]
+    fn a_full_queue_refuses_publishers() {
+        let mut p = queue_worker(400.0);
+        p.server_profile.cpu_cores = 2;
+        configure(&mut p, "q", "rabbitmq", &[("max_queue_length", 50.0)]);
+        let report = run(&p, &options(6, 40.0)).expect("run");
+        let q = node_of(&report, "q");
+        assert!(q.rejected > 1_000, "{q:?}");
+        assert!(report.summary.error_rate > 0.3, "{:?}", report.summary);
+        assert!(q.max_queue <= 50);
+    }
+
+    #[test]
+    fn a_crashed_worker_loses_its_jobs_and_the_queue_catches_up_afterwards() {
+        let mut p = queue_worker(150.0);
+        p.chaos.faults.push(Fault {
+            id: "f".to_owned(),
+            target: "w".to_owned(),
+            kind: FaultKind::Crash,
+            start_s: 20.0,
+            duration_s: 10.0,
+        });
+        let report = run(&p, &options(6, 80.0)).expect("run");
+        let backlog = node_of(&report, "q").backlog.as_ref().expect("backlog");
+        assert!(backlog.failed > 0, "jobs in flight are lost: {backlog:?}");
+        assert!(
+            backlog.lag.p95_ms > 2_000.0,
+            "messages waited out the crash: {backlog:?}"
+        );
+        assert!(
+            backlog.left < 20,
+            "and were worked off afterwards: {backlog:?}"
+        );
+        assert_eq!(report.summary.errors, 0, "the producers never noticed");
+    }
+
+    #[test]
+    fn a_queue_without_workers_still_behaves_as_before() {
+        let t = topology(
+            &[
+                ("c", NodeKind::Client),
+                ("q", NodeKind::Queue),
+                ("app", NodeKind::AppServer),
+            ],
+            &[("c", "q"), ("q", "app")],
+        );
+        let mut p = project(t, 40.0, 1.0);
+        p.server_profile.cpu_cores = 4;
+        let report = run(&p, &options(6, 30.0)).expect("run");
+        assert!(node_of(&report, "q").backlog.is_none());
+        assert!(
+            node_of(&report, "app").arrivals > 1_000,
+            "requests still flow through"
+        );
+        assert!(
+            report.summary.latency.mean_ms > 5.0,
+            "and the client waits for the app"
+        );
+        assert!(
+            !report
+                .assumptions
+                .iter()
+                .any(|a| a.contains("workers after it"))
+        );
+    }
+
+    #[test]
+    fn runs_with_the_new_nodes_are_reproducible_and_live_ticks_show_the_backlog() {
+        use crate::sim::engine::Simulation;
+        use crate::sim::model::Model;
+        let mut p = queue_worker(400.0);
+        p.server_profile.cpu_cores = 2;
+        assert_eq!(
+            run(&p, &options(8, 30.0)).expect("a"),
+            run(&p, &options(8, 30.0)).expect("b")
+        );
+        let model = Model::compile(&p).expect("model");
+        let mut sim = Simulation::new(&model, &options(8, 30.0));
+        sim.step_until(10_000_000).expect("step");
+        let tick = sim.tick();
+        let q = tick.nodes.iter().find(|n| n.id == "q").expect("queue tick");
+        assert!(q.queue > 500, "the tick's queue counts the backlog: {q:?}");
+    }
+}
