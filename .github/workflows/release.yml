@@ -2,6 +2,8 @@ name: Release
 
 # Pushing a tag such as v0.2.0 builds installers for every platform and attaches them, with the
 # update manifest (latest.json), to a DRAFT GitHub Release. Publish the draft by hand.
+# The manifest is written once, after all builds, by the `manifest` job: the build jobs would
+# each write their own copy at the same time and the last one would list a single platform.
 # Signing is optional: see docs/adr/ADR-012-packaging-and-updates.md for the secrets.
 
 on:
@@ -126,9 +128,28 @@ jobs:
           releaseBody: Unsigned unless the signing secrets were configured. Estimates only; see the README.
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: true
+          includeUpdaterJson: false
           args: >-
             --target ${{ matrix.target }}
             --config src-tauri/tauri.release.conf.json
             ${{ matrix.ffmpeg && '--config src-tauri/tauri.ffmpeg.conf.json' || '' }}
             ${{ env.WINDOWS_SIGN_CONFIG }}
+
+  manifest:
+    name: Update manifest
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build latest.json from the signed installers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir sigs
+          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --pattern '*.sig' --dir sigs
+          node scripts/update-manifest.mjs "${GITHUB_REF_NAME}" "${GITHUB_REPOSITORY}" sigs latest.json \
+            "Release ${GITHUB_REF_NAME}. Edit the notes in latest.json before publishing if they should say more."
+          gh release upload "${GITHUB_REF_NAME}" latest.json --repo "${GITHUB_REPOSITORY}" --clobber

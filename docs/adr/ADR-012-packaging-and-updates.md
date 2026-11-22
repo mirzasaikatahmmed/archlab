@@ -13,7 +13,9 @@ settles how ffmpeg (ADR-011) ships.
 1. **Release flow.** Pushing a tag `vMAJOR.MINOR.PATCH` runs `.github/workflows/release.yml`. It
    first checks that the tag, `package.json`, `tauri.conf.json` and `Cargo.toml` agree
    (`scripts/check-version.mjs`, also run in CI), then builds with `tauri-action` on four runners
-   and uploads the installers plus the update manifest `latest.json` to a **draft** GitHub Release.
+   and uploads the installers to a **draft** GitHub Release; a final `manifest` job then builds
+   `latest.json` from their signatures (`scripts/update-manifest.mjs`), because the four build
+   jobs would otherwise overwrite each other's copy and leave one platform in it.
    A person publishes the draft. Targets: macOS Apple silicon and Intel (`.dmg`, `.app`; two
    separate builds, not a universal one, so no sidecar has to be merged with `lipo`), Windows x64
    (`.exe` NSIS, `.msi`), Linux x64 (`.deb`, `.AppImage`).
