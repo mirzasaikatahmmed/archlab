@@ -1,7 +1,8 @@
 //! WebM (VP9) export. Raw RGBA frames are piped to an ffmpeg child process on stdin.
 //!
-//! ffmpeg is a separate program: it is looked up next to the app (the bundled sidecar),
-//! then in `ARCHLAB_FFMPEG`, then on `PATH`. See ADR-011.
+//! ffmpeg is a separate program, looked up in `ARCHLAB_FFMPEG`, then next to the app (the
+//! bundled `archlab-ffmpeg` sidecar), then on `PATH`, then in the usual macOS install folders
+//! (a Finder-launched app does not get the shell's `PATH`). See ADR-011 and ADR-012.
 
 use std::ffi::OsString;
 use std::io::{Read, Write};
@@ -49,6 +50,28 @@ fn exe_name() -> &'static str {
     }
 }
 
+/// The bundled program's name. It is not `ffmpeg`, so a Linux package never collides with the
+/// distribution's own ffmpeg in `/usr/bin`.
+fn sidecar_name() -> &'static str {
+    if cfg!(windows) {
+        "archlab-ffmpeg.exe"
+    } else {
+        "archlab-ffmpeg"
+    }
+}
+
+/// Where package managers put ffmpeg on macOS, which a Finder-launched app cannot find on `PATH`.
+fn well_known_dirs() -> Vec<PathBuf> {
+    if cfg!(target_os = "macos") {
+        vec![
+            PathBuf::from("/opt/homebrew/bin"),
+            PathBuf::from("/usr/local/bin"),
+        ]
+    } else {
+        Vec::new()
+    }
+}
+
 fn is_file(path: &Path) -> bool {
     path.is_file()
 }
@@ -58,15 +81,25 @@ pub fn locate_in(
     override_path: Option<OsString>,
     app_dir: Option<&Path>,
     path_var: Option<OsString>,
+    extra_dirs: &[PathBuf],
 ) -> Option<PathBuf> {
     if let Some(explicit) = override_path.map(PathBuf::from).filter(|p| is_file(p)) {
         return Some(explicit);
     }
-    if let Some(sidecar) = app_dir.map(|d| d.join(exe_name())).filter(|p| is_file(p)) {
+    if let Some(sidecar) = app_dir
+        .map(|d| d.join(sidecar_name()))
+        .filter(|p| is_file(p))
+    {
         return Some(sidecar);
     }
-    path_var.and_then(|paths| {
+    let on_path = path_var.and_then(|paths| {
         std::env::split_paths(&paths)
+            .map(|dir| dir.join(exe_name()))
+            .find(|p| is_file(p))
+    });
+    on_path.or_else(|| {
+        extra_dirs
+            .iter()
             .map(|dir| dir.join(exe_name()))
             .find(|p| is_file(p))
     })
@@ -80,6 +113,7 @@ pub fn locate() -> Option<PathBuf> {
         std::env::var_os("ARCHLAB_FFMPEG"),
         app_dir.as_deref(),
         std::env::var_os("PATH"),
+        &well_known_dirs(),
     )
 }
 
@@ -272,38 +306,54 @@ mod tests {
     }
 
     #[test]
-    fn locates_in_override_then_app_dir_then_path() {
+    fn locates_in_override_then_sidecar_then_path_then_known_folders() {
         let dir = tempfile::tempdir().expect("dir");
-        let a = dir.path().join("a");
-        let b = dir.path().join("b");
-        let c = dir.path().join("c");
-        for d in [&a, &b, &c] {
-            std::fs::create_dir(d).expect("mkdir");
-            std::fs::write(d.join(exe_name()), "").expect("file");
+        let [a, b, c, d] = ["a", "b", "c", "d"].map(|n| dir.path().join(n));
+        for (folder, name) in [
+            (&a, exe_name()),
+            (&b, sidecar_name()),
+            (&c, exe_name()),
+            (&d, exe_name()),
+        ] {
+            std::fs::create_dir(folder).expect("mkdir");
+            std::fs::write(folder.join(name), "").expect("file");
         }
         let explicit = a.join(exe_name());
         let path_var = std::env::join_paths([&c]).expect("join");
+        let extra = [d.clone()];
         assert_eq!(
             locate_in(
                 Some(explicit.clone().into_os_string()),
                 Some(&b),
-                Some(path_var.clone())
+                Some(path_var.clone()),
+                &extra
             ),
             Some(explicit)
         );
         assert_eq!(
-            locate_in(None, Some(&b), Some(path_var.clone())),
-            Some(b.join(exe_name()))
+            locate_in(None, Some(&b), Some(path_var.clone()), &extra),
+            Some(b.join(sidecar_name()))
         );
         assert_eq!(
-            locate_in(None, None, Some(path_var)),
+            locate_in(None, None, Some(path_var), &extra),
             Some(c.join(exe_name()))
+        );
+        assert_eq!(
+            locate_in(None, None, None, &extra),
+            Some(d.join(exe_name()))
         );
         let missing = dir.path().join("nowhere");
         assert_eq!(
-            locate_in(Some(missing.clone().into_os_string()), None, None),
+            locate_in(Some(missing.into_os_string()), None, None, &[]),
             None
         );
+    }
+
+    #[test]
+    fn a_plain_ffmpeg_next_to_the_app_is_not_mistaken_for_the_sidecar() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::write(dir.path().join(exe_name()), "").expect("file");
+        assert_eq!(locate_in(None, Some(dir.path()), None, &[]), None);
     }
 
     #[cfg(unix)]

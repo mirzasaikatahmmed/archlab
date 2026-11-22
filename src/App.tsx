@@ -7,6 +7,7 @@ import { ScenarioLibrary } from "./components/ScenarioLibrary";
 import { ScenarioPlayer } from "./components/ScenarioPlayer";
 import { SimulateTab } from "./components/SimulateTab";
 import { WhatIfTab } from "./components/WhatIfTab";
+import { UpdateNotice } from "./components/UpdateNotice";
 import { ServerProfileForm } from "./components/ServerProfileForm";
 import { TrafficProfileEditor } from "./components/TrafficProfileEditor";
 import { TopologyCanvas } from "./components/topology/TopologyCanvas";
@@ -56,6 +57,7 @@ export default function App() {
           setView({ kind: "library" });
         }}
         scenariosActive={view.kind !== "project"}
+        footer={<UpdateNotice />}
         onImport={() => {
           void store.importFile().then((opened) => {
             if (opened) {

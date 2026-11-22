@@ -15,12 +15,13 @@ rusqlite_migration, `ProjectRepository`), runtime/detect (sysinfo), sim/ (model 
 
 ## Current state
 
-Phases 1-8 committed locally, unpushed (Phase 8 = `db42156` on `feat/phase-8-scenarios`). Phase 9 (export) is
-implemented on `feat/phase-9-export`, UNCOMMITTED. GUI never run by hand (`pnpm tauri dev`); visuals checked only
+Phases 1-9 are on `main` (pushed to private GitHub repo `mirzasaikatahmmed/archlab`). Phase 10
+(packaging/updates) is implemented on `feat/phase-10-packaging`, UNCOMMITTED. GUI never run by hand (`pnpm tauri dev`); visuals checked only
 in headless Chrome with a mocked backend; real-mode timing only in Rust tests; sim-vs-real divergence not measured by
 the user. Release builds needed for meaningful calibration. Video needs a system ffmpeg (libvpx-vp9); not
-yet run end to end with a real ffmpeg (none installed here; encoder tested with a fake script). Next: Phase 10
-(packaging incl. bundling ffmpeg sidecar, signing, auto-update). Scenario import/export deferred.
+yet run end to end with a real ffmpeg (none installed here; encoder tested with a fake script). Release workflow (tag `v*` -> draft release)
+never run yet; signing secrets not set; updates need a public repo. Local release build + 8 s launch OK on macOS.
+Scenario import/export deferred. Next: first tag/draft release, then polish.
 
 ## Key decisions
 
@@ -68,6 +69,12 @@ yet run end to end with a real ffmpeg (none installed here; encoder tested with 
   only by `export::write_text` with a fixed extension; dialogs are Rust (`rfd`), not a tauri plugin (the dialog
   plugin needs tauri 2.12). `video_frame` is a raw-body command outside the typed registry (see lib.rs).
   After `drawScene` reset transform/textAlign before drawing overlays (it leaves them set).
+- Packaging (ADR-012): updater plugin pinned 2.12.0 (newest compatible with tauri 2.11.6; dialog/updater latest need
+  2.12). Update key at `~/.tauri/archlab-updater.key` (NOT in repo; secret `TAURI_SIGNING_PRIVATE_KEY`). Sidecar
+  `archlab-ffmpeg` (Win/Linux only, LGPL, pinned in scripts/ffmpeg-manifest.json); macOS uses brew ffmpeg.
+  `createUpdaterArtifacts`/`externalBin` live only in `tauri.release.conf.json`/`tauri.ffmpeg.conf.json` overlays.
+- `.gitattributes` forces LF: without it the Windows CI job failed `format:check` (CRLF checkout). First CI run on `main`:
+  macOS green, Windows stopped at format (rest unverified), Linux build step cancelled (unknown): re-run to confirm.
 - sysinfo 0.40: `System::new()` and `Disks::new_with_refreshed_list()` return `Result`.
 
 ## Setup and run
@@ -76,4 +83,4 @@ See README. `pnpm check` runs all checks; `pnpm tauri dev` runs the app.
 
 ## Last updated
 
-2026-11-22: Phase 9 export (JSON, Markdown, SVG, WebM via ffmpeg), project import; branch feat/phase-9-export.
+2026-11-22: Phase 10 packaging: icons, updater, release workflow, ffmpeg sidecar scripts; branch feat/phase-10-packaging.

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { ProjectSummary } from "../bindings";
 import { Icon } from "./Icon";
 import { ThemeToggle } from "./ThemeToggle";
@@ -15,6 +15,8 @@ interface Props {
   scenariosActive?: boolean;
   /** Opens a project file; the button is hidden when absent. */
   onImport?: () => void;
+  /** Extra content for the foot of the sidebar, such as the update notice. */
+  footer?: ReactNode;
 }
 
 export function ProjectSidebar({
@@ -27,6 +29,7 @@ export function ProjectSidebar({
   onOpenScenarios,
   scenariosActive = false,
   onImport,
+  footer,
 }: Props) {
   const [name, setName] = useState("");
   const trimmed = name.trim();
@@ -113,6 +116,7 @@ export function ProjectSidebar({
       )}
       <div className="sidebar-foot">
         <ThemeToggle />
+        {footer}
         <p className="muted">All simulation results are estimates.</p>
       </div>
     </nav>

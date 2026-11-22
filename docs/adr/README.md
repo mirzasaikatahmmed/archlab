@@ -13,3 +13,4 @@
 | [009](ADR-009-what-if-analysis.md)          | What-if analysis                             | Accepted |
 | [010](ADR-010-guided-scenarios.md)          | Guided scenarios and suggestions             | Accepted |
 | [011](ADR-011-export.md)                    | Export: JSON, Markdown, SVG, WebM            | Accepted |
+| [012](ADR-012-packaging-and-updates.md)     | Packaging, signing, updates, ffmpeg sidecar  | Accepted |

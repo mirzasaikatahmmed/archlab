@@ -1475,3 +1475,24 @@ details ul {
 .export-bar p {
   margin: 0;
 }
+
+/* ---------- Updates ---------- */
+
+.update-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.update-notice p {
+  margin: 0;
+}
+
+.update-notice .check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}

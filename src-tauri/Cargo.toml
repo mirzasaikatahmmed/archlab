@@ -35,6 +35,7 @@ rand_chacha = "0.10.0"
 libm = "0.2.16"
 tokio = { version = "1.54.1", features = ["net", "time", "io-util", "sync", "rt-multi-thread"] }
 rfd = "0.15"
+tauri-plugin-updater = "=2.12.0"
 
 [lints.rust]
 unsafe_code = "forbid"

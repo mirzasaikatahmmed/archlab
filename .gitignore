@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Fetched by scripts/ffmpeg.mjs for release builds
+src-tauri/binaries/

@@ -1,0 +1,18 @@
+{
+  "comment": "Pinned LGPL ffmpeg builds from BtbN/FFmpeg-Builds (month-end autobuild, ffmpeg n9.0.2). Bump together with the sha256 values from that release's checksums.sha256. Only builds with 'lgpl' in the name are allowed; see ADR-012.",
+  "repo": "BtbN/FFmpeg-Builds",
+  "tag": "autobuild-2026-10-31-12-59",
+  "sourceTag": "n9.0.2",
+  "builds": {
+    "x86_64-unknown-linux-gnu": {
+      "asset": "ffmpeg-n9.0.2-39-g7adfbe40dc-linux64-lgpl-9.0.tar.xz",
+      "sha256": "6046d6731b26f58887e953561551d254a6eec9fbca4100dfeab56e19af8328d5",
+      "binary": "bin/ffmpeg"
+    },
+    "x86_64-pc-windows-msvc": {
+      "asset": "ffmpeg-n9.0.2-39-g7adfbe40dc-win64-lgpl-9.0.zip",
+      "sha256": "9d37c564e0d01c18cde184a079fa6ef04d7d2783ada41da81d04165cc8f1a650",
+      "binary": "bin/ffmpeg.exe"
+    }
+  }
+}

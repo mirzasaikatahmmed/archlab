@@ -1,0 +1,5 @@
+# Keep LF everywhere, including Windows checkouts, so Prettier and rustfmt checks agree with CI.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary

@@ -17,6 +17,11 @@ export default tseslint.config(
     rules: { ...reactHooks.configs.recommended.rules },
   },
   {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { globals: globals.node },
+    extends: [tseslint.configs.disableTypeChecked],
+  },
+  {
     files: ["*.{js,ts}"],
     extends: [tseslint.configs.disableTypeChecked],
   },

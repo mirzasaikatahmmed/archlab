@@ -32,6 +32,7 @@ pub fn run() {
         Box::new(tauri::generate_handler![commands::export::video_frame]);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(move |invoke| {
             if invoke.message.command() == "video_frame" {
                 raw(invoke)

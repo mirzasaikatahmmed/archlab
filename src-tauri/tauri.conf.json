@@ -26,13 +26,37 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["app", "dmg", "nsis", "msi", "deb", "appimage"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "ArchLab contributors",
+    "copyright": "Copyright (c) 2026 ArchLab contributors",
+    "category": "DeveloperTool",
+    "shortDescription": "Capacity planning and distributed-system simulation",
+    "longDescription": "ArchLab simulates how a server design behaves under load, faults and change, entirely on your computer. Results are estimates.",
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU1NkYwNEEzOTlGNkQxMTEKUldRUjBmYVpvd1J2VmRURnV5QThIRVFJeWdrSzlyRzJFREFJbldtWFBIbktHTHpXeVJya2dzOWkK",
+      "endpoints": [
+        "https://github.com/mirzasaikatahmmed/archlab/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

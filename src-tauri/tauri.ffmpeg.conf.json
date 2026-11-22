@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "externalBin": ["binaries/archlab-ffmpeg"],
+    "resources": {
+      "binaries/FFMPEG-LICENSE.txt": "licenses/FFMPEG-LICENSE.txt"
+    }
+  }
+}

@@ -18,11 +18,14 @@
     "fmt:rust:check": "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm fmt:rust:check && pnpm lint:rust && pnpm test:rust",
-    "bindings": "cargo test --manifest-path src-tauri/Cargo.toml write_bindings -- --ignored"
+    "bindings": "cargo test --manifest-path src-tauri/Cargo.toml write_bindings -- --ignored",
+    "check:version": "node scripts/check-version.mjs",
+    "ffmpeg:fetch": "node scripts/ffmpeg.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^7.0.7",
     "@tauri-apps/api": "~2.11.1",
+    "@tauri-apps/plugin-updater": "2.12.0",
     "@xyflow/react": "^13.0.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

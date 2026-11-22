@@ -1,4 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { check } from "@tauri-apps/plugin-updater";
 import {
   commands,
   type AppError,
@@ -33,6 +34,13 @@ export type {
   RealEvent,
   WhatIfEvent,
 };
+
+/** A newer version found by the updater. */
+export interface AvailableUpdate {
+  version: string;
+  /** Downloads, verifies the signature and installs; the app must be restarted afterwards. */
+  install: () => Promise<void>;
+}
 
 /** Thrown when a Rust command returns a typed error. */
 export class CommandError extends Error {
@@ -161,6 +169,11 @@ export const api = {
     } catch (err) {
       throw isAppError(err) ? new CommandError(err) : err;
     }
+  },
+  /** Asks the update server for a newer version; null when this one is current. */
+  checkForUpdate: async (): Promise<AvailableUpdate | null> => {
+    const update = await check();
+    return update ? { version: update.version, install: () => update.downloadAndInstall() } : null;
   },
   videoFinish: (): Promise<number> => unwrap(commands.videoFinish()),
   videoCancel: (): Promise<null> => unwrap(commands.videoCancel()),

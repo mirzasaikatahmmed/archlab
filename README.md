@@ -8,7 +8,7 @@ external dependencies for end users. **All simulation results are estimates.**
 ## Tech stack
 
 - [Tauri v2](https://v2.tauri.app/) + Rust core; rusqlite (bundled SQLite) + rusqlite_migration; sysinfo
-- `rfd` native file dialogs; ffmpeg (external program) for WebM export
+- `rfd` native file dialogs; ffmpeg (external program) for WebM export; Tauri updater plugin
 - tauri-specta generated TypeScript bindings (`src/bindings.ts`)
 - Vite + React + TypeScript UI, pnpm; React Flow (`@xyflow/react`), react-hook-form + zod, Zustand
 - ESLint (typescript-eslint), Prettier, Vitest + Testing Library; rustfmt, clippy, `cargo test`
@@ -28,6 +28,8 @@ external dependencies for end users. **All simulation results are estimates.**
 | `pnpm install`                      | Install JS dependencies                    |
 | `pnpm tauri dev`                    | Run the desktop app with hot reload        |
 | `pnpm tauri build`                  | Build an unsigned installer/bundle         |
+| `pnpm check:version`                | Check package/Tauri/Cargo versions agree   |
+| `pnpm ffmpeg:fetch`                 | Fetch the pinned LGPL ffmpeg (release use) |
 | `pnpm typecheck` / `lint` / `test`  | TypeScript checks, ESLint, Vitest          |
 | `pnpm format` / `format:check`      | Prettier write / check                     |
 | `pnpm fmt:rust:check` / `lint:rust` | rustfmt check, clippy (`-D warnings`)      |
@@ -103,6 +105,36 @@ external dependencies for end users. **All simulation results are estimates.**
 2. Add it to `EMBEDDED` in `src-tauri/src/domain/template.rs` and to the id list in its test.
 3. Bump a template's `version` when its settings change.
 
+## Releases and updates
+
+- **Cut a release:** bump the version in `package.json`, `src-tauri/tauri.conf.json` and
+  `src-tauri/Cargo.toml` (`pnpm check:version` checks they agree), merge to `main`, then push a tag:
+  `git tag v0.2.0 && git push origin v0.2.0`. The Release workflow builds macOS (Apple silicon and
+  Intel), Windows and Linux installers and attaches them, with the update manifest, to a **draft**
+  GitHub Release. Review and publish it by hand.
+- **Secrets** (repository settings, Actions secrets). Only the update key is required for updates;
+  the rest enable OS code signing and are optional:
+  `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (update signing; generated with
+  `pnpm tauri signer generate`, public half is in `tauri.conf.json`);
+  `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`,
+  `APPLE_PASSWORD`, `APPLE_TEAM_ID` (macOS signing and notarization);
+  `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD` (Windows signing).
+  Keep the private update key safe: without it, installed apps cannot be updated.
+- **Unsigned builds:** macOS asks you to approve the app (System Settings, Privacy & Security, "Open
+  Anyway"); Windows SmartScreen shows "More info", then "Run anyway".
+- **Updates:** the app checks GitHub Releases at startup (switch off in the sidebar) and installs a
+  newer signed version on request. This works only while the repository is public.
+  See [ADR-012](docs/adr/ADR-012-packaging-and-updates.md).
+
+## Third-party software
+
+Windows and Linux installers include **FFmpeg** (n9.0.2, LGPL v3 or later, built by
+[BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds), pinned in `scripts/ffmpeg-manifest.json`)
+as the separate program `archlab-ffmpeg`, used only for WebM export. Its licence text is installed
+with the app; its source is at [ffmpeg.org](https://ffmpeg.org/download.html) (tag n9.0.2). You can
+use your own build by setting `ARCHLAB_FFMPEG`. On macOS, install ffmpeg yourself
+(`brew install ffmpeg`).
+
 ## Project structure
 
 ```
@@ -122,6 +154,7 @@ src-tauri/src/
   whatif/            What-if runner: compare, sweep, capacity search
   export/            Project file, Markdown, SVG and ffmpeg video encoder
   ipc.rs / error.rs  Command registry + binding export, typed AppError
+scripts/             Release helpers: ffmpeg fetch (pinned, checksummed), version check
 src-tauri/templates/ Embedded config template JSON
 src-tauri/scenarios/ Embedded guided scenario JSON
 docs/adr/            Architecture decision records
@@ -139,9 +172,9 @@ Rule: no business logic in the UI; commands only delegate to the Rust modules.
 6. Real mode + calibration (done)
 7. What-if (done)
 8. Scenarios (done)
-9. Export (JSON, Markdown, SVG, WebM; PDF later) (current)
-10. Packaging, signing, auto-update
+9. Export (JSON, Markdown, SVG, WebM; PDF later) (done)
+10. Packaging, signing, auto-update (current)
 
 ## Documentation
 
-- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode, ADR-009 what-if, ADR-010 scenarios, ADR-011 export
+- [ADR index](docs/adr/README.md): ADR-001 Tauri, ADR-002 storage, ADR-003 IPC type generation, ADR-004 simulation engine, ADR-005 live runs, ADR-006 Stage, ADR-007 chaos, ADR-008 real mode, ADR-009 what-if, ADR-010 scenarios, ADR-011 export, ADR-012 packaging and updates
